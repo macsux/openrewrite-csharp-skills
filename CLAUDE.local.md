@@ -135,7 +135,41 @@ all 3 are expected to be conductor worktrees. If the user forgot to add them, ST
 
 - when running any mod command, assume it must be run via `modw` script from the cli conductor worktree that is explicitly injected into context. NEVER run global `mod` unless explicitly told otherwise.
 
-- `rewrite-csharp` inside conductor worktree requires a symlink under `external/openrewrite/rewrite` pointing to  `rewrite` conductor worktree. When starting a new chat ensure this symlink exists. Also ensure that additionalDirs is the same on every new user message as the one prior. If the sdk directory changed from last message, the symlink MUST be updated. Recipes project has two solution files:
+### Source-link setup — create ONCE per session; redo ONLY when a linked worktree changes
+
+The source-link symlinks (below) must exist before the first build/run of a session, and be
+repointed if a linked worktree path changes. Whether they need (re)creating is a PURE-REASONING
+check that costs nothing — do NOT probe disk, run `ls`/`readlink`, or issue any command just to
+"verify":
+
+- **First user message of a conversation** → create both symlinks once, then proceed.
+- **Any later message** → mentally compare the Environment block's Additional working
+  directories in THIS message against the PREVIOUS user message. If the `rewrite` (SDK) and
+  `recipes` worktree paths are unchanged, the symlinks are already correct — do nothing and go
+  straight to the real work. Only if a path changed, repoint the affected symlink(s) before the
+  next build/run.
+
+Never re-run the symlink commands on a turn where the linked worktrees didn't change — that
+wasted work is exactly what this rule exists to avoid.
+
+There are TWO symlinks, both pointing at the SAME injected `rewrite` worktree — and BOTH are
+required (missing either is silent: the build/recipe falls back to a stale canonical clone):
+
+1. **CLI worktree** (primary workdir): `external/openrewrite/rewrite` → `<rewrite-worktree>`.
+   Used by the fat-jar composite build (`.local/gradle/local-rewrite.init.gradle.kts`).
+2. **Recipes worktree** (the injected `recipes` additional dir): `external/openrewrite/rewrite`
+   → `<rewrite-worktree>`. Used by `Recipes.Source.slnx` to import the SDK's C# project from
+   source. This is the one most easily forgotten because it lives in a different worktree.
+
+Create/repoint both idempotently (safe to re-run every time):
+```
+mkdir -p "<cli-worktree>/external/openrewrite"     && ln -sfn "<rewrite-worktree>" "<cli-worktree>/external/openrewrite/rewrite"
+mkdir -p "<recipes-worktree>/external/openrewrite" && ln -sfn "<rewrite-worktree>" "<recipes-worktree>/external/openrewrite/rewrite"
+```
+If the CLI, `rewrite`, or `recipes` worktree is NOT injected into context, STOP and tell the
+user — never self-discover or fall back to canonical clones.
+
+Recipes project has two solution files:
 
   - `Recipes.slnx` - ties rewrite sdk via PackageReference
   - `Recipes.Source.slnx` - imports rewrite sdk csharp project as solution via symlink. The user prefer to use this mode when using IDE as it allows making changes to both recipes and sdk seamlessly without dealing with republishing packages. 
@@ -152,11 +186,15 @@ Builds the CLI fat jar against a local rewrite checkout via Gradle composite bui
 
 
 
-**Setup (initial or if user changes linked workspaces)
+**Setup (gated by the Source-link setup rule above)
 
-Do this once on first request or if user changes recipes to a different workspace. It REQUIRES that the user has provided rewrite sdk and recipes repos as additional workspaces (injected into environment block in context)
+Ensure the Source-link symlinks (above) are in place before building/running. Redo them only
+when a linked workspace path changes between turns — detected by reading the Environment block,
+never by running commands. It REQUIRES that the user has provided rewrite sdk and recipes repos
+as additional workspaces (injected into environment block in context)
 
-- create symlinks to related repos under `external/<orgname>/<reponame>` folder structure
+- create/repoint BOTH source-link symlinks (CLI worktree AND recipes worktree) per the
+  pre-flight above — each `external/openrewrite/rewrite` → the injected `rewrite` worktree
 - modify `.claude/settings.local.json` to use expanded absolute paths (it doesn't do variable expansion). Ensure that expanded env vars are explicitly used in any commands inside this turn as the `settings.local.json` changes will not take effect until next conversation turn.
 - ensure the dev fat jar is built (see special command below)
 - set env vars for remainder of the session:
