@@ -169,6 +169,23 @@ mkdir -p "<recipes-worktree>/external/openrewrite" && ln -sfn "<rewrite-worktree
 If the CLI, `rewrite`, or `recipes` worktree is NOT injected into context, STOP and tell the
 user — never self-discover or fall back to canonical clones.
 
+**Also repoint the recipes registry (same trigger: once per session, and on any change to the
+linked `recipes` worktree).** `moderne-cli-setup.sh` copies `~/.moderne/cli/recipes-v5.csv` into
+this worktree's `$MODERNE_CLI_HOME` to isolate it from other runs. That copy holds absolute DLL
+paths (rows like `nuget,<abs-path>.dll,...`) pointing at whatever recipes-csharp worktree was
+registered globally — usually a DIFFERENT conductor worktree than the one linked this session.
+Rewrite the recipes-csharp worktree segment to the currently-linked `recipes` worktree, or
+`mod run` dies resolving dead DLL paths (`dotnet add package <dll>` → `Invalid package id`,
+because the stale DLL no longer exists on disk):
+```
+CSV="$MODERNE_CLI_HOME/recipes-v5.csv"
+RECIPES_PARENT="$(dirname "<recipes-worktree>")"   # e.g. /Users/andrew/conductor/workspaces/recipes-csharp
+sed -i '' -E "s#${RECIPES_PARENT}/[^/]+#<recipes-worktree>#g" "$CSV"
+```
+This only rewrites the worktree-name path segment (`.../recipes-csharp/<name>/...`), so it is
+idempotent and a no-op when already pointing at the linked worktree. The DLLs must still exist —
+`dotnet build Recipes.Source.slnx` in the linked recipes worktree (see setup below) produces them.
+
 Recipes project has two solution files:
 
   - `Recipes.slnx` - ties rewrite sdk via PackageReference
