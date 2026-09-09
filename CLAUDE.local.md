@@ -215,19 +215,20 @@ as additional workspaces (injected into environment block in context)
 - modify `.claude/settings.local.json` to use expanded absolute paths (it doesn't do variable expansion). Ensure that expanded env vars are explicitly used in any commands inside this turn as the `settings.local.json` changes will not take effect until next conversation turn.
 - ensure the dev fat jar is built (see special command below)
 - set env vars for remainder of the session:
+
 ```
 export REWRITE_DOTNET_RPC_SERVER=`<REWRITE_SDK_REPO>/rewrite-csharp/csharp/OpenRewrite.Tool/OpenRewrite.Tool.csproj`
 export MODERNE_CLI_HOME="$CONDUCTOR_WORKSPACE_PATH/.local/.moderne/cli"
 ```
 - `dotnet build Recipes.Source.slnx` recipes repo
 - register recipe packages:
-  ```
+```
   modw config recipes nuget install <LINKED_RECIPE_REPO>/OpenRewrite.Recipes.CSharp.Core/bin/Debug/net10.0/OpenRewrite.Recipes.CSharp.Core.dll
    modw config recipes nuget install <LINKED_RECIPE_REPO>/OpenRewrite.Recipes.CSharp.CodeQuality/bin/Debug/net10.0/OpenRewrite.Recipes.CSharp.CodeQuality.dll
 
  modw config recipes nuget install <LINKED_RECIPE_REPO>/OpenRewrite.Recipes.CSharp.Migration.Dotnet/bin/Debug/net10.0/OpenRewrite.Recipes.CSharp.Migration.Dotnet.dll
-  ```
-  
+```
+
 **Building the fat jar:**
 
 `./gradlew :mod:devFatJar -I .local/gradle/local-rewrite.init.gradle.kts`
@@ -297,3 +298,30 @@ Generally this involves
 When iterating on recipes, a lot of time is spent waiting for `mod build` or `mod run` to finish. Instead of running a single command at org level, run them individually at repo level when possible in parallel (up to 7 concurrent mod executions). Short commands that don't use rpc are not bound by this work (ex. `mod git`, `mod config`). Prioritize running mod commands that give you results to perform next steps: get recipes running on repos that have finished building lsts, once those are done start checking if they are good. 
 
 Try to batch modifications / changes across runs so many issues are addressed simultaneously next time you run `mod build` / `mod run`. That means try to identify and fix as many issues as possible in a given working set FIRST, make necessary code changes, but deffer rebuilding CLI jar / recipes as to not interrupt any in builds / recipe runs. So instead of focusing on single issue at a time, try to identify and fix ALL issues you spot between rebuilds and verify that they are properly fixed in next run. 
+
+, in any of the .NET repos (rewrite-csharp, recipes, CLI tooling).
+The locator's assembly-redirect pattern is fragile: any MSBuild assembly reachable in the app
+base (including transitive runtime assets from other packages) silently defeats the redirect
+and fails at runtime with MissingMethodException/FileLoadException, and it forces every
+consumer of the published OpenRewrite.CSharp package to carry compile-only pins to stay
+functional.
+
+Referencing `Microsoft.Build` as a plain runtime dependency is fine for pure managed APIs
+(e.g. `SolutionFile.Parse`). What must not happen in-process is locator-driven assembly
+loading or SDK project *evaluation*: when evaluation is needed outside MSBuildWorkspace
+(e.g. NuGet restore-graph generation in `NuGetResolver`), run the .NET SDK's own MSBuild as a
+child process (`dotnet msbuild -t:<Target>`) and exchange data through files, keeping
+dependency resolution in-process via the NuGet client libraries.
+
+Keep `Microsoft.CodeAnalysis.*` packages on the latest stable release and upgrade them together.
+
+
+## Code Style
+
+- Add javadoc, xml doc only on public APIs. Keep it concise and avoid entirely for simple / self explanatory methods. Avoid code level comments entirely in newly generated code
+
+
+## Other Code Guidelines 
+
+- never use `Microsoft.Build.Locator` nuget package. Modern Roslyn (`Microsoft.CodeAnalysis.Workspaces.MSBuild` 4.8+) discovers MSBuild itself and
+evaluates projects in its own out-of-process BuildHost
