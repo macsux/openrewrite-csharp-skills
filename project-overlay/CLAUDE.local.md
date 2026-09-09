@@ -81,9 +81,13 @@ Before opening PR, ALWAYS ensure that gradle test target has been run with lates
   - CLI - gradle devFatJar target (preceeded by pTML of the SDK repo)
   - Rewrite SDK - pTML gradle target
   - Recipes - pTML gradle target 
-
 - When running any csharp recipe through `mod` for first time in claude session, confirm that recipe package versions registered with `mod` are the same as the versions of recipe packages from recipe repo builds (so ensure that the version produced by pTML on recipes repo is the same one that's registered in mod). If it's not, register the newest version of the package with mod.
 - Changes to Gradle files require consultation with the user first. If you are planning to make a change, first analyze carefully if you considered how it is supposed to work right now, and if you still feel change is required STOP and explain IN DETAIL what problem the change would address and how it would work. Give user the diff you're going to introduce to the file. 
+- Add javadoc, xml doc only on public APIs. Keep it concise and avoid entirely for simple / self explanatory methods. Avoid code level comments entirely in newly generated code
+- Never use `Microsoft.Build.Locator` nuget package. Modern Roslyn (`Microsoft.CodeAnalysis.Workspaces.MSBuild` 4.8+) discovers MSBuild itself and evaluates projects in its own out-of-process BuildHost
+- Keep `Microsoft.CodeAnalysis.*` packages on the latest stable release and upgrade them together.
+- Do not add any "version-pins" to any gradle files. If you believe there's a version mismatch, let the user know. 
+- Do not generate any "notes" on worked performed (or known issues) in `.context` or similar folders unless asked to - all info is to be conveyed in console response by default.
 
 ### Version bumps
 The solution uses nebula release management and recieves automatic version number. If the local version is behind origin, and a new maven release has been made that includes a higher version of rewrite / recipes then rebuildling local mod cli will NOT pick up the local version loaded into pTML but instead use the one from the maven. If it looks like expected code changes haven't "kicked in", this is a common reason why. The solution is to rebase the code on to remote to ensure local builds receive the highest version number and are selected.
@@ -199,10 +203,6 @@ Recipes project has two solution files:
 
 Builds the CLI fat jar against a local rewrite checkout via Gradle composite build, so rewrite (Java + C#) changes flow in without publishing. Avoids ~/.m2 / ~/.nuget collisions between parallel worktrees. This is the preferred way to work inside conductor to ensure isolated parallel work streams
 
-
-
-
-
 **Setup (gated by the Source-link setup rule above)
 
 Ensure the Source-link symlinks (above) are in place before building/running. Redo them only
@@ -237,6 +237,10 @@ export MODERNE_CLI_HOME="$CONDUCTOR_WORKSPACE_PATH/.local/.moderne/cli"
 ## Expectations
 
 All repos (primary and additional) are all considered single source code. The can existing in one or more of these repos - you are free to make changes in all of them. When something does not work, it may very well be because of bugs not in the recipe itself but in the rewrite-csharp building blocks that created the LST, remoting protocol, or other issues. These are components of the same solution, and your goal is to track down underlying issues and fix them until the recipe works. 
+
+### Verification
+
+- Full regression verification is to be done using mod fat jar on a real / sample repo before telling the user that something is "completed". Relying on just passing tests is not good enough
 
 ## LST Modelling
 The project is built with the goal of reusing as many of Java's LST models as possible when modelling constructs in other languages. This may mean more complexity in printer / parser to make it fit. When something cannot fit cleanly, language specific syntax classes may be created. 
@@ -299,29 +303,34 @@ When iterating on recipes, a lot of time is spent waiting for `mod build` or `mo
 
 Try to batch modifications / changes across runs so many issues are addressed simultaneously next time you run `mod build` / `mod run`. That means try to identify and fix as many issues as possible in a given working set FIRST, make necessary code changes, but deffer rebuilding CLI jar / recipes as to not interrupt any in builds / recipe runs. So instead of focusing on single issue at a time, try to identify and fix ALL issues you spot between rebuilds and verify that they are properly fixed in next run. 
 
-, in any of the .NET repos (rewrite-csharp, recipes, CLI tooling).
-The locator's assembly-redirect pattern is fragile: any MSBuild assembly reachable in the app
-base (including transitive runtime assets from other packages) silently defeats the redirect
-and fails at runtime with MissingMethodException/FileLoadException, and it forces every
-consumer of the published OpenRewrite.CSharp package to carry compile-only pins to stay
-functional.
+## Friction Detection
 
-Referencing `Microsoft.Build` as a plain runtime dependency is fine for pure managed APIs
-(e.g. `SolutionFile.Parse`). What must not happen in-process is locator-driven assembly
-loading or SDK project *evaluation*: when evaluation is needed outside MSBuildWorkspace
-(e.g. NuGet restore-graph generation in `NuGetResolver`), run the .NET SDK's own MSBuild as a
-child process (`dotnet msbuild -t:<Target>`) and exchange data through files, keeping
-dependency resolution in-process via the NuGet client libraries.
-
-Keep `Microsoft.CodeAnalysis.*` packages on the latest stable release and upgrade them together.
+If any steps in this guide have not worked as expected, created unexpected friction that required further investigation, or required workarounds - add a section to your response detailed what the friction was and recommend changes to this file, claude skills, or related setup scripts to improve subsequent interactions. Recommend changes are meant to be concise and deliver just enough information to make it useful. Avoid suggesting edits here that go into extensive details on underlying reasons, previous attempts, etc. You're giving just enough information for smart AI to avoid repeating same mistake - less is more. Do not make such changes yourself without consulting with the user on what you plan on doing. Avoid this section entirely if everything was as expected.
 
 
-## Code Style
 
-- Add javadoc, xml doc only on public APIs. Keep it concise and avoid entirely for simple / self explanatory methods. Avoid code level comments entirely in newly generated code
+## Responses
 
+- avoid giving user unnecessary information: reafferming that something is gitignored by design, providing counts of test passes / failures (user is only interested in failures and underlying reasons)
 
-## Other Code Guidelines 
+### Summary
 
-- never use `Microsoft.Build.Locator` nuget package. Modern Roslyn (`Microsoft.CodeAnalysis.Workspaces.MSBuild` 4.8+) discovers MSBuild itself and
-evaluates projects in its own out-of-process BuildHost
+User wants to see a quick glance summary of what was done and what's outstanding without having to do a full scrollback for details. The last block of a response after doing work should include something like this:
+
+```
+Status: Ready to PR | Need user consultation | Done but with recommended improvements
+
+Verification: 
+[ FAIL ] Compiles     (which repo / project - keep it short so it fits on one line. I don't need full details)
+[ PASS ] Tests
+[ FAIL ] mod build    (doesn't compile) 
+[ SKIP  ] mod run
+
+Repos:
+[ CLEAN ] - CLI
+[ DIRTY ] - Rewrite SDK    (12 added, 3 modified, 2 removed)
+
+Other:
+[ LOW / MEDIUM / HIGH ] - Task Friction    (recommendations provided)
+```
+

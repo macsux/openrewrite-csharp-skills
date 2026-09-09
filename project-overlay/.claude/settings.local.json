@@ -1,0 +1,6 @@
+{
+  "env": {
+    "MODERNE_CLI_HOME": "$CONDUCTOR_WORKSPACE_PATH/.local/.moderne/cli",
+    "REWRITE_DOTNET_RPC_SERVER": "$CONDUCTOR_WORKSPACE_PATH/external/openrewrite/rewrite/rewrite-csharp/csharp/OpenRewrite.Tool/OpenRewrite.Tool.csproj"
+  }
+}
