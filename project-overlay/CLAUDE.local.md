@@ -103,7 +103,7 @@ Key commands:
 
 `mod config recipes list` - list all registered **packages** that contribute recipes and recipe counts each one is contributing (doesn't list actual recipes within them).
 
-`mod build <path>` - builds LSTs for a given folder. The folder may be a "folder org" made up of many subfolders / git repos. Each git repo will be a seperate LST built, but mod build can be run org folder to build many repos in one command as batch. Also, mod build REQUIRES that the folder containing source code be git initialized, commited and have remote `origin` with a url that follows <hostAddress>/org/repo pattern (doesn't have to be a valid URL - just needs to be configured). Make sure you do this if you're generating synthetic sample source project to test `mod` against.  
+`mod build <path>` - builds LSTs for a given folder. The folder may be a "folder org" made up of many subfolders / git repos. Each git repo will be a seperate LST built, but mod build can be run org folder to build many repos in one command as batch. Also, mod build REQUIRES that the folder containing source code be git initialized, commited and have remote `origin` with a url that follows <hostAddress>/org/repo pattern. Must be a valid open source URL but not necessary hold the same source code - just needs to be configured (use [`https://github.com/dotnet/samples.git`](https://github.com/dotnet/samples.git) or similar real OSS URL). Make sure you do this if you're generating synthetic sample source project to test `mod` against.  
 
 `mod run --recipe=<FullyQualifiedClassName> <path>` runs recipe on the repo at given path. Recipe must be one of the FQN that were registered from one of the recipe packages
 
@@ -305,7 +305,7 @@ Try to batch modifications / changes across runs so many issues are addressed si
 
 ## Friction Detection
 
-If any steps in this guide have not worked as expected, created unexpected friction that required further investigation, or required workarounds - add a section to your response detailed what the friction was and recommend changes to this file, claude skills, or related setup scripts to improve subsequent interactions. Recommend changes are meant to be concise and deliver just enough information to make it useful. Avoid suggesting edits here that go into extensive details on underlying reasons, previous attempts, etc. You're giving just enough information for smart AI to avoid repeating same mistake - less is more. Do not make such changes yourself without consulting with the user on what you plan on doing. Avoid this section entirely if everything was as expected.
+If any steps in this guide have not worked as expected, created unexpected friction that required further investigation, or required workarounds - add a section to your response detailed what the friction was and recommend changes to this file, claude skills, or related setup scripts to improve subsequent interactions. Recommend changes are meant to be concise and deliver just enough information to make it useful. Avoid suggesting edits here that go into extensive details on underlying reasons, previous attempts, etc. You're giving just enough information for smart AI to avoid repeating same mistake - less is more. Do not make such changes yourself without consulting with the user on what you plan on doing. Avoid this section entirely if everything was as expected. Each recommendation must be copy-paste ready: name the target section heading and give the literal lines to add, already worded for the doc. Do not describe the change in prose and leave the user to phrase it.
 
 
 
@@ -327,10 +327,17 @@ Verification:
 [ SKIP  ] mod run
 
 Repos:
-[ CLEAN ] - CLI
-[ DIRTY ] - Rewrite SDK    (12 added, 3 modified, 2 removed)
+[ CHANGED   ] - Rewrite SDK      (12 added, 3 modified, 2 removed — uncommitted)
+[ CHANGED   ] - rewrite-skills   (2 commits — unpushed)
+[ UNCHANGED ] - CLI
 
 Other:
 [ LOW / MEDIUM / HIGH ] - Task Friction    (recommendations provided)
 ```
+
+- Annotate only non-PASS lines. A `[ PASS ]` line carries no parenthetical.
+- In `Repos`, give change counts only (`12 added, 3 modified`). Never list or describe the files.
+- `Repos` reports which repos the task touched, not git cleanliness. `CHANGED` means the task
+  produced changes there, committed or not; the parenthetical carries the landing state
+  (`uncommitted`, `unpushed`, `pushed`). List `CHANGED` repos first.
 
