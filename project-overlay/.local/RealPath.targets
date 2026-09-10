@@ -1,0 +1,82 @@
+<!--
+  RealPath.targets  -  companion to RealPath.props.  Pins every ProjectReference to a single
+  spelling so that nothing downstream has to guess which of two names for the same project
+  file it is looking at.
+
+  Why this is needed, separately from the obj/bin anchoring in RealPath.props:
+
+  A RELATIVE project path is resolved by tasks against the process working directory, which
+  MSBuild points at the project directory - and on Unix getcwd() hands back the real,
+  symlink-free path.  A path that is already rooted is left exactly as it was written.  So in
+  a build entered through a symlink, relative project paths silently become "real" while
+  everything derived from $(MSBuildProjectFullPath) stays "as seen", and the two spellings mix
+  inside one build.  Two things then break, both silently:
+
+    * NuGet's restore graph is assembled by two passes - the project walk
+      (_GenerateRestoreProjectPathItemsPerFramework, which runs ConvertToAbsolutePath) and the
+      spec pass (GetRestoreProjectReferencesTask, which combines the item spec with
+      $(MSBuildProjectFullPath)).  They disagree, so NuGet drops every reference it cannot
+      match and writes a project.assets.json with an EMPTY project reference closure.  The
+      compiler then loses all transitive project references and transitive package references.
+
+    * GenerateDepsFile resolves the assets file's relative "msbuildProject" entries against
+      $(MSBuildProjectFullPath) (as seen) and matches them to %(ReferencePath.MSBuildSourceProjectFile).
+      A transitive reference that arrived as a relative path has been canonicalised to the real
+      spelling by then, so it does not match and is dropped from the deps.json - the build
+      succeeds and the application fails at startup with FileNotFoundException.
+
+  Making every project path rooted removes the ambiguity at the source, because a rooted path
+  is never re-resolved.  We root them with %(FullPath) - the spelling this build is already
+  using - rather than the resolved real path: it needs no symlink resolution to be correct,
+  it matches what $(MSBuildProjectFullPath) will say, and it cannot be fooled by a reference
+  that points outside the repository.
+
+  All of this only runs when the project was actually reached through a symlink; an ordinary
+  checkout keeps its relative ProjectReference item specs untouched.
+-->
+<Project>
+
+  <!-- Direct references, at evaluation time: this is the copy NuGet's restore targets read. -->
+  <ItemGroup Condition="'$(ProjectPathContainsSymlink)' == 'true' and '@(ProjectReference)' != ''">
+    <_RpProjectReference Include="@(ProjectReference)" />
+    <ProjectReference Remove="@(ProjectReference)" />
+    <ProjectReference Include="@(_RpProjectReference->'%(FullPath)')" />
+    <_RpProjectReference Remove="@(_RpProjectReference)" />
+  </ItemGroup>
+
+  <!--
+    Transitive references, at build time: the SDK reads them out of the assets file and appends
+    them to @(ProjectReference) in IncludeTransitiveProjectReferences, as RELATIVE paths, long
+    after evaluation.  Catch them there.  The hook has to be AfterTargets on the target that
+    adds them - ResolvePackageDependenciesForBuild, which itself runs BeforeTargets
+    AssignProjectConfiguration - so we land after the transitive references exist but still
+    before AssignProjectConfiguration, the first target that consumes @(ProjectReference).
+    (BeforeTargets="AssignProjectConfiguration" would be too early: a target runs at most once,
+    and that hook fires before the SDK has added anything.)
+  -->
+  <Target Name="_RpRootProjectReferences"
+          Condition="'$(ProjectPathContainsSymlink)' == 'true'"
+          AfterTargets="ResolvePackageDependenciesForBuild;IncludeTransitiveProjectReferences">
+    <ItemGroup>
+      <_RpProjectReference Include="@(ProjectReference)" />
+      <ProjectReference Remove="@(ProjectReference)" />
+      <ProjectReference Include="@(_RpProjectReference->'%(FullPath)')" />
+      <_RpProjectReference Remove="@(_RpProjectReference)" />
+    </ItemGroup>
+  </Target>
+
+  <!--
+    The climb in RealPath.Walk.props is unrolled a fixed number of times.  A path deeper than that
+    budget leaves $(RealProjectDir) empty and the whole normalisation turns itself off, which
+    is the right failure mode - the build behaves exactly like stock MSBuild - but it should
+    not be silent, or the symlink bugs would quietly come back.  Raise DEPTH in
+    generate-RealPath-walk.py and regenerate if this ever fires.
+  -->
+  <Target Name="_RpWarnIfUnresolved"
+          BeforeTargets="BeforeBuild"
+          Condition="'$(NormalizeSymlinkedProjectPath)' == 'true' and '$(RealProjectDir)' == '' and '$(DesignTimeBuild)' != 'true'">
+    <Warning Code="RP0001"
+             Text="RealPath could not resolve '$(MSBuildProjectDirectory)' to a symlink-free path within its unroll budget, so symlink normalisation is disabled for this project. Raise DEPTH in generate-RealPath-walk.py and regenerate RealPath.Walk.props." />
+  </Target>
+
+</Project>

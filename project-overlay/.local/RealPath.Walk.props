@@ -1,0 +1,271 @@
+<!--
+  RealPath.Walk.props  -  GENERATED, do not edit.  Regenerate with generate-RealPath-walk.py.
+
+  One step of the climb performed by RealPath.props, repeated 32 times.  Each step either
+  replaces a symlinked component with its final target or pops one component onto the tail
+  being rebuilt, and every step is a no-op once the cursor is empty - which happens after
+  roughly as many steps as the path has components.
+
+  This is written out rather than looped because MSBuild evaluation has neither loops nor a way
+  to run code: a task, inline C# included, executes long after evaluation, and
+  $(BaseIntermediateOutputPath) has to be set during it.
+-->
+<Project>
+
+  <PropertyGroup Condition="'$(_RpCur)' != ''">
+    <_RpLink>$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).LinkTarget)</_RpLink>
+    <_RpRoot Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetPathRoot(`$(_RpCur)`))</_RpRoot>
+    <_RpTail Condition="'$(_RpLink)' == '' and '$(_RpCur)' != '$(_RpRoot)'">$([System.IO.Path]::GetFileName(`$(_RpCur)`))$(_RpSep)$(_RpTail)</_RpTail>
+    <_RpCur Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetDirectoryName(`$(_RpCur)`))</_RpCur>
+    <_RpCur Condition="'$(_RpLink)' != ''">$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).ResolveLinkTarget(true).FullName)</_RpCur>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RpCur)' != ''">
+    <_RpLink>$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).LinkTarget)</_RpLink>
+    <_RpRoot Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetPathRoot(`$(_RpCur)`))</_RpRoot>
+    <_RpTail Condition="'$(_RpLink)' == '' and '$(_RpCur)' != '$(_RpRoot)'">$([System.IO.Path]::GetFileName(`$(_RpCur)`))$(_RpSep)$(_RpTail)</_RpTail>
+    <_RpCur Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetDirectoryName(`$(_RpCur)`))</_RpCur>
+    <_RpCur Condition="'$(_RpLink)' != ''">$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).ResolveLinkTarget(true).FullName)</_RpCur>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RpCur)' != ''">
+    <_RpLink>$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).LinkTarget)</_RpLink>
+    <_RpRoot Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetPathRoot(`$(_RpCur)`))</_RpRoot>
+    <_RpTail Condition="'$(_RpLink)' == '' and '$(_RpCur)' != '$(_RpRoot)'">$([System.IO.Path]::GetFileName(`$(_RpCur)`))$(_RpSep)$(_RpTail)</_RpTail>
+    <_RpCur Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetDirectoryName(`$(_RpCur)`))</_RpCur>
+    <_RpCur Condition="'$(_RpLink)' != ''">$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).ResolveLinkTarget(true).FullName)</_RpCur>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RpCur)' != ''">
+    <_RpLink>$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).LinkTarget)</_RpLink>
+    <_RpRoot Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetPathRoot(`$(_RpCur)`))</_RpRoot>
+    <_RpTail Condition="'$(_RpLink)' == '' and '$(_RpCur)' != '$(_RpRoot)'">$([System.IO.Path]::GetFileName(`$(_RpCur)`))$(_RpSep)$(_RpTail)</_RpTail>
+    <_RpCur Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetDirectoryName(`$(_RpCur)`))</_RpCur>
+    <_RpCur Condition="'$(_RpLink)' != ''">$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).ResolveLinkTarget(true).FullName)</_RpCur>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RpCur)' != ''">
+    <_RpLink>$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).LinkTarget)</_RpLink>
+    <_RpRoot Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetPathRoot(`$(_RpCur)`))</_RpRoot>
+    <_RpTail Condition="'$(_RpLink)' == '' and '$(_RpCur)' != '$(_RpRoot)'">$([System.IO.Path]::GetFileName(`$(_RpCur)`))$(_RpSep)$(_RpTail)</_RpTail>
+    <_RpCur Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetDirectoryName(`$(_RpCur)`))</_RpCur>
+    <_RpCur Condition="'$(_RpLink)' != ''">$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).ResolveLinkTarget(true).FullName)</_RpCur>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RpCur)' != ''">
+    <_RpLink>$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).LinkTarget)</_RpLink>
+    <_RpRoot Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetPathRoot(`$(_RpCur)`))</_RpRoot>
+    <_RpTail Condition="'$(_RpLink)' == '' and '$(_RpCur)' != '$(_RpRoot)'">$([System.IO.Path]::GetFileName(`$(_RpCur)`))$(_RpSep)$(_RpTail)</_RpTail>
+    <_RpCur Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetDirectoryName(`$(_RpCur)`))</_RpCur>
+    <_RpCur Condition="'$(_RpLink)' != ''">$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).ResolveLinkTarget(true).FullName)</_RpCur>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RpCur)' != ''">
+    <_RpLink>$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).LinkTarget)</_RpLink>
+    <_RpRoot Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetPathRoot(`$(_RpCur)`))</_RpRoot>
+    <_RpTail Condition="'$(_RpLink)' == '' and '$(_RpCur)' != '$(_RpRoot)'">$([System.IO.Path]::GetFileName(`$(_RpCur)`))$(_RpSep)$(_RpTail)</_RpTail>
+    <_RpCur Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetDirectoryName(`$(_RpCur)`))</_RpCur>
+    <_RpCur Condition="'$(_RpLink)' != ''">$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).ResolveLinkTarget(true).FullName)</_RpCur>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RpCur)' != ''">
+    <_RpLink>$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).LinkTarget)</_RpLink>
+    <_RpRoot Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetPathRoot(`$(_RpCur)`))</_RpRoot>
+    <_RpTail Condition="'$(_RpLink)' == '' and '$(_RpCur)' != '$(_RpRoot)'">$([System.IO.Path]::GetFileName(`$(_RpCur)`))$(_RpSep)$(_RpTail)</_RpTail>
+    <_RpCur Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetDirectoryName(`$(_RpCur)`))</_RpCur>
+    <_RpCur Condition="'$(_RpLink)' != ''">$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).ResolveLinkTarget(true).FullName)</_RpCur>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RpCur)' != ''">
+    <_RpLink>$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).LinkTarget)</_RpLink>
+    <_RpRoot Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetPathRoot(`$(_RpCur)`))</_RpRoot>
+    <_RpTail Condition="'$(_RpLink)' == '' and '$(_RpCur)' != '$(_RpRoot)'">$([System.IO.Path]::GetFileName(`$(_RpCur)`))$(_RpSep)$(_RpTail)</_RpTail>
+    <_RpCur Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetDirectoryName(`$(_RpCur)`))</_RpCur>
+    <_RpCur Condition="'$(_RpLink)' != ''">$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).ResolveLinkTarget(true).FullName)</_RpCur>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RpCur)' != ''">
+    <_RpLink>$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).LinkTarget)</_RpLink>
+    <_RpRoot Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetPathRoot(`$(_RpCur)`))</_RpRoot>
+    <_RpTail Condition="'$(_RpLink)' == '' and '$(_RpCur)' != '$(_RpRoot)'">$([System.IO.Path]::GetFileName(`$(_RpCur)`))$(_RpSep)$(_RpTail)</_RpTail>
+    <_RpCur Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetDirectoryName(`$(_RpCur)`))</_RpCur>
+    <_RpCur Condition="'$(_RpLink)' != ''">$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).ResolveLinkTarget(true).FullName)</_RpCur>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RpCur)' != ''">
+    <_RpLink>$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).LinkTarget)</_RpLink>
+    <_RpRoot Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetPathRoot(`$(_RpCur)`))</_RpRoot>
+    <_RpTail Condition="'$(_RpLink)' == '' and '$(_RpCur)' != '$(_RpRoot)'">$([System.IO.Path]::GetFileName(`$(_RpCur)`))$(_RpSep)$(_RpTail)</_RpTail>
+    <_RpCur Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetDirectoryName(`$(_RpCur)`))</_RpCur>
+    <_RpCur Condition="'$(_RpLink)' != ''">$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).ResolveLinkTarget(true).FullName)</_RpCur>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RpCur)' != ''">
+    <_RpLink>$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).LinkTarget)</_RpLink>
+    <_RpRoot Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetPathRoot(`$(_RpCur)`))</_RpRoot>
+    <_RpTail Condition="'$(_RpLink)' == '' and '$(_RpCur)' != '$(_RpRoot)'">$([System.IO.Path]::GetFileName(`$(_RpCur)`))$(_RpSep)$(_RpTail)</_RpTail>
+    <_RpCur Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetDirectoryName(`$(_RpCur)`))</_RpCur>
+    <_RpCur Condition="'$(_RpLink)' != ''">$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).ResolveLinkTarget(true).FullName)</_RpCur>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RpCur)' != ''">
+    <_RpLink>$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).LinkTarget)</_RpLink>
+    <_RpRoot Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetPathRoot(`$(_RpCur)`))</_RpRoot>
+    <_RpTail Condition="'$(_RpLink)' == '' and '$(_RpCur)' != '$(_RpRoot)'">$([System.IO.Path]::GetFileName(`$(_RpCur)`))$(_RpSep)$(_RpTail)</_RpTail>
+    <_RpCur Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetDirectoryName(`$(_RpCur)`))</_RpCur>
+    <_RpCur Condition="'$(_RpLink)' != ''">$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).ResolveLinkTarget(true).FullName)</_RpCur>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RpCur)' != ''">
+    <_RpLink>$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).LinkTarget)</_RpLink>
+    <_RpRoot Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetPathRoot(`$(_RpCur)`))</_RpRoot>
+    <_RpTail Condition="'$(_RpLink)' == '' and '$(_RpCur)' != '$(_RpRoot)'">$([System.IO.Path]::GetFileName(`$(_RpCur)`))$(_RpSep)$(_RpTail)</_RpTail>
+    <_RpCur Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetDirectoryName(`$(_RpCur)`))</_RpCur>
+    <_RpCur Condition="'$(_RpLink)' != ''">$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).ResolveLinkTarget(true).FullName)</_RpCur>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RpCur)' != ''">
+    <_RpLink>$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).LinkTarget)</_RpLink>
+    <_RpRoot Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetPathRoot(`$(_RpCur)`))</_RpRoot>
+    <_RpTail Condition="'$(_RpLink)' == '' and '$(_RpCur)' != '$(_RpRoot)'">$([System.IO.Path]::GetFileName(`$(_RpCur)`))$(_RpSep)$(_RpTail)</_RpTail>
+    <_RpCur Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetDirectoryName(`$(_RpCur)`))</_RpCur>
+    <_RpCur Condition="'$(_RpLink)' != ''">$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).ResolveLinkTarget(true).FullName)</_RpCur>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RpCur)' != ''">
+    <_RpLink>$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).LinkTarget)</_RpLink>
+    <_RpRoot Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetPathRoot(`$(_RpCur)`))</_RpRoot>
+    <_RpTail Condition="'$(_RpLink)' == '' and '$(_RpCur)' != '$(_RpRoot)'">$([System.IO.Path]::GetFileName(`$(_RpCur)`))$(_RpSep)$(_RpTail)</_RpTail>
+    <_RpCur Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetDirectoryName(`$(_RpCur)`))</_RpCur>
+    <_RpCur Condition="'$(_RpLink)' != ''">$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).ResolveLinkTarget(true).FullName)</_RpCur>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RpCur)' != ''">
+    <_RpLink>$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).LinkTarget)</_RpLink>
+    <_RpRoot Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetPathRoot(`$(_RpCur)`))</_RpRoot>
+    <_RpTail Condition="'$(_RpLink)' == '' and '$(_RpCur)' != '$(_RpRoot)'">$([System.IO.Path]::GetFileName(`$(_RpCur)`))$(_RpSep)$(_RpTail)</_RpTail>
+    <_RpCur Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetDirectoryName(`$(_RpCur)`))</_RpCur>
+    <_RpCur Condition="'$(_RpLink)' != ''">$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).ResolveLinkTarget(true).FullName)</_RpCur>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RpCur)' != ''">
+    <_RpLink>$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).LinkTarget)</_RpLink>
+    <_RpRoot Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetPathRoot(`$(_RpCur)`))</_RpRoot>
+    <_RpTail Condition="'$(_RpLink)' == '' and '$(_RpCur)' != '$(_RpRoot)'">$([System.IO.Path]::GetFileName(`$(_RpCur)`))$(_RpSep)$(_RpTail)</_RpTail>
+    <_RpCur Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetDirectoryName(`$(_RpCur)`))</_RpCur>
+    <_RpCur Condition="'$(_RpLink)' != ''">$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).ResolveLinkTarget(true).FullName)</_RpCur>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RpCur)' != ''">
+    <_RpLink>$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).LinkTarget)</_RpLink>
+    <_RpRoot Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetPathRoot(`$(_RpCur)`))</_RpRoot>
+    <_RpTail Condition="'$(_RpLink)' == '' and '$(_RpCur)' != '$(_RpRoot)'">$([System.IO.Path]::GetFileName(`$(_RpCur)`))$(_RpSep)$(_RpTail)</_RpTail>
+    <_RpCur Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetDirectoryName(`$(_RpCur)`))</_RpCur>
+    <_RpCur Condition="'$(_RpLink)' != ''">$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).ResolveLinkTarget(true).FullName)</_RpCur>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RpCur)' != ''">
+    <_RpLink>$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).LinkTarget)</_RpLink>
+    <_RpRoot Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetPathRoot(`$(_RpCur)`))</_RpRoot>
+    <_RpTail Condition="'$(_RpLink)' == '' and '$(_RpCur)' != '$(_RpRoot)'">$([System.IO.Path]::GetFileName(`$(_RpCur)`))$(_RpSep)$(_RpTail)</_RpTail>
+    <_RpCur Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetDirectoryName(`$(_RpCur)`))</_RpCur>
+    <_RpCur Condition="'$(_RpLink)' != ''">$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).ResolveLinkTarget(true).FullName)</_RpCur>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RpCur)' != ''">
+    <_RpLink>$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).LinkTarget)</_RpLink>
+    <_RpRoot Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetPathRoot(`$(_RpCur)`))</_RpRoot>
+    <_RpTail Condition="'$(_RpLink)' == '' and '$(_RpCur)' != '$(_RpRoot)'">$([System.IO.Path]::GetFileName(`$(_RpCur)`))$(_RpSep)$(_RpTail)</_RpTail>
+    <_RpCur Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetDirectoryName(`$(_RpCur)`))</_RpCur>
+    <_RpCur Condition="'$(_RpLink)' != ''">$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).ResolveLinkTarget(true).FullName)</_RpCur>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RpCur)' != ''">
+    <_RpLink>$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).LinkTarget)</_RpLink>
+    <_RpRoot Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetPathRoot(`$(_RpCur)`))</_RpRoot>
+    <_RpTail Condition="'$(_RpLink)' == '' and '$(_RpCur)' != '$(_RpRoot)'">$([System.IO.Path]::GetFileName(`$(_RpCur)`))$(_RpSep)$(_RpTail)</_RpTail>
+    <_RpCur Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetDirectoryName(`$(_RpCur)`))</_RpCur>
+    <_RpCur Condition="'$(_RpLink)' != ''">$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).ResolveLinkTarget(true).FullName)</_RpCur>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RpCur)' != ''">
+    <_RpLink>$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).LinkTarget)</_RpLink>
+    <_RpRoot Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetPathRoot(`$(_RpCur)`))</_RpRoot>
+    <_RpTail Condition="'$(_RpLink)' == '' and '$(_RpCur)' != '$(_RpRoot)'">$([System.IO.Path]::GetFileName(`$(_RpCur)`))$(_RpSep)$(_RpTail)</_RpTail>
+    <_RpCur Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetDirectoryName(`$(_RpCur)`))</_RpCur>
+    <_RpCur Condition="'$(_RpLink)' != ''">$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).ResolveLinkTarget(true).FullName)</_RpCur>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RpCur)' != ''">
+    <_RpLink>$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).LinkTarget)</_RpLink>
+    <_RpRoot Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetPathRoot(`$(_RpCur)`))</_RpRoot>
+    <_RpTail Condition="'$(_RpLink)' == '' and '$(_RpCur)' != '$(_RpRoot)'">$([System.IO.Path]::GetFileName(`$(_RpCur)`))$(_RpSep)$(_RpTail)</_RpTail>
+    <_RpCur Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetDirectoryName(`$(_RpCur)`))</_RpCur>
+    <_RpCur Condition="'$(_RpLink)' != ''">$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).ResolveLinkTarget(true).FullName)</_RpCur>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RpCur)' != ''">
+    <_RpLink>$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).LinkTarget)</_RpLink>
+    <_RpRoot Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetPathRoot(`$(_RpCur)`))</_RpRoot>
+    <_RpTail Condition="'$(_RpLink)' == '' and '$(_RpCur)' != '$(_RpRoot)'">$([System.IO.Path]::GetFileName(`$(_RpCur)`))$(_RpSep)$(_RpTail)</_RpTail>
+    <_RpCur Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetDirectoryName(`$(_RpCur)`))</_RpCur>
+    <_RpCur Condition="'$(_RpLink)' != ''">$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).ResolveLinkTarget(true).FullName)</_RpCur>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RpCur)' != ''">
+    <_RpLink>$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).LinkTarget)</_RpLink>
+    <_RpRoot Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetPathRoot(`$(_RpCur)`))</_RpRoot>
+    <_RpTail Condition="'$(_RpLink)' == '' and '$(_RpCur)' != '$(_RpRoot)'">$([System.IO.Path]::GetFileName(`$(_RpCur)`))$(_RpSep)$(_RpTail)</_RpTail>
+    <_RpCur Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetDirectoryName(`$(_RpCur)`))</_RpCur>
+    <_RpCur Condition="'$(_RpLink)' != ''">$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).ResolveLinkTarget(true).FullName)</_RpCur>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RpCur)' != ''">
+    <_RpLink>$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).LinkTarget)</_RpLink>
+    <_RpRoot Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetPathRoot(`$(_RpCur)`))</_RpRoot>
+    <_RpTail Condition="'$(_RpLink)' == '' and '$(_RpCur)' != '$(_RpRoot)'">$([System.IO.Path]::GetFileName(`$(_RpCur)`))$(_RpSep)$(_RpTail)</_RpTail>
+    <_RpCur Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetDirectoryName(`$(_RpCur)`))</_RpCur>
+    <_RpCur Condition="'$(_RpLink)' != ''">$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).ResolveLinkTarget(true).FullName)</_RpCur>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RpCur)' != ''">
+    <_RpLink>$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).LinkTarget)</_RpLink>
+    <_RpRoot Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetPathRoot(`$(_RpCur)`))</_RpRoot>
+    <_RpTail Condition="'$(_RpLink)' == '' and '$(_RpCur)' != '$(_RpRoot)'">$([System.IO.Path]::GetFileName(`$(_RpCur)`))$(_RpSep)$(_RpTail)</_RpTail>
+    <_RpCur Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetDirectoryName(`$(_RpCur)`))</_RpCur>
+    <_RpCur Condition="'$(_RpLink)' != ''">$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).ResolveLinkTarget(true).FullName)</_RpCur>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RpCur)' != ''">
+    <_RpLink>$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).LinkTarget)</_RpLink>
+    <_RpRoot Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetPathRoot(`$(_RpCur)`))</_RpRoot>
+    <_RpTail Condition="'$(_RpLink)' == '' and '$(_RpCur)' != '$(_RpRoot)'">$([System.IO.Path]::GetFileName(`$(_RpCur)`))$(_RpSep)$(_RpTail)</_RpTail>
+    <_RpCur Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetDirectoryName(`$(_RpCur)`))</_RpCur>
+    <_RpCur Condition="'$(_RpLink)' != ''">$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).ResolveLinkTarget(true).FullName)</_RpCur>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RpCur)' != ''">
+    <_RpLink>$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).LinkTarget)</_RpLink>
+    <_RpRoot Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetPathRoot(`$(_RpCur)`))</_RpRoot>
+    <_RpTail Condition="'$(_RpLink)' == '' and '$(_RpCur)' != '$(_RpRoot)'">$([System.IO.Path]::GetFileName(`$(_RpCur)`))$(_RpSep)$(_RpTail)</_RpTail>
+    <_RpCur Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetDirectoryName(`$(_RpCur)`))</_RpCur>
+    <_RpCur Condition="'$(_RpLink)' != ''">$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).ResolveLinkTarget(true).FullName)</_RpCur>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RpCur)' != ''">
+    <_RpLink>$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).LinkTarget)</_RpLink>
+    <_RpRoot Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetPathRoot(`$(_RpCur)`))</_RpRoot>
+    <_RpTail Condition="'$(_RpLink)' == '' and '$(_RpCur)' != '$(_RpRoot)'">$([System.IO.Path]::GetFileName(`$(_RpCur)`))$(_RpSep)$(_RpTail)</_RpTail>
+    <_RpCur Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetDirectoryName(`$(_RpCur)`))</_RpCur>
+    <_RpCur Condition="'$(_RpLink)' != ''">$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).ResolveLinkTarget(true).FullName)</_RpCur>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(_RpCur)' != ''">
+    <_RpLink>$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).LinkTarget)</_RpLink>
+    <_RpRoot Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetPathRoot(`$(_RpCur)`))</_RpRoot>
+    <_RpTail Condition="'$(_RpLink)' == '' and '$(_RpCur)' != '$(_RpRoot)'">$([System.IO.Path]::GetFileName(`$(_RpCur)`))$(_RpSep)$(_RpTail)</_RpTail>
+    <_RpCur Condition="'$(_RpLink)' == ''">$([System.IO.Path]::GetDirectoryName(`$(_RpCur)`))</_RpCur>
+    <_RpCur Condition="'$(_RpLink)' != ''">$([System.IO.Directory]::GetParent(`$(_RpCur)$(_RpSep)_`).ResolveLinkTarget(true).FullName)</_RpCur>
+  </PropertyGroup>
+
+</Project>

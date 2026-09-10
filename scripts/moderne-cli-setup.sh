@@ -7,9 +7,9 @@
 # nothing outside the repo is hardcoded:
 #
 #   scripts/moderne-cli-setup.sh  this script
-#   scripts/.local/               copied verbatim to <workspace>/.local/
 #   scripts/moderne-cli/          tracked-file overlays, keyed by repo-relative path
-#   project-overlay/              copied to <workspace>/ and locally excluded
+#   project-overlay/              copied to <workspace>/ and locally excluded,
+#                                 including project-overlay/.local/ -> <workspace>/.local/
 #
 # Idempotent: safe to run on a workspace that's already been set up.
 
@@ -19,7 +19,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILLS_REPO="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 OVERLAY_SRC="$SCRIPT_DIR/moderne-cli"
-LOCAL_SRC="$SCRIPT_DIR/.local"
 SKILLS_SRC="$SKILLS_REPO/project-overlay"
 
 # Resolve the target workspace from wherever Conductor invoked us. Prefer the
@@ -35,31 +34,34 @@ if [[ "$REPO_ROOT" == "$SKILLS_REPO" ]]; then
   exit 1
 fi
 
+cd "$REPO_ROOT"
+
+# The version pin below only applies to moderne-cli. Other repos set up by this
+# script (e.g. a rewrite worktree, which has no gradle/libs.versions.toml) skip
+# it and go straight to the overlays — this must not abort the run.
 TOML="$REPO_ROOT/gradle/libs.versions.toml"
 
-if [[ ! -f "$TOML" ]]; then
-  echo "setup: $TOML not found — skipping" >&2
-  exit 0
+if [[ -f "$TOML" ]]; then
+  # If skip-worktree is already set, clear it so sed can write cleanly,
+  # then re-set it at the end. (sed -i works either way, but this keeps
+  # git's view of the index consistent during the edit.)
+  if git ls-files -v -- "$TOML" | grep -q '^S'; then
+    git update-index --no-skip-worktree -- "$TOML"
+  fi
+
+  # Targeted line edits. Anchored to the start of the line + key name so we
+  # only touch the intended coordinates, not every "latest.release" in the file.
+  sed -i '' \
+    -e 's|^rewrite-version = "latest\.release"|rewrite-version = "latest.integration"|' \
+    -e 's|^\(rewrite-csharp = "org\.openrewrite:rewrite-csharp:\)latest\.release"|\1latest.integration"|' \
+    "$TOML"
+
+  git update-index --skip-worktree -- "$TOML"
+
+  echo "setup: $TOML pinned to latest.integration and marked skip-worktree"
+else
+  echo "setup: no gradle/libs.versions.toml — skipping the version pin" >&2
 fi
-
-# If skip-worktree is already set, clear it so sed can write cleanly,
-# then re-set it at the end. (sed -i works either way, but this keeps
-# git's view of the index consistent during the edit.)
-cd "$REPO_ROOT"
-if git ls-files -v -- "$TOML" | grep -q '^S'; then
-  git update-index --no-skip-worktree -- "$TOML"
-fi
-
-# Targeted line edits. Anchored to the start of the line + key name so we
-# only touch the intended coordinates, not every "latest.release" in the file.
-sed -i '' \
-  -e 's|^rewrite-version = "latest\.release"|rewrite-version = "latest.integration"|' \
-  -e 's|^\(rewrite-csharp = "org\.openrewrite:rewrite-csharp:\)latest\.release"|\1latest.integration"|' \
-  "$TOML"
-
-git update-index --skip-worktree -- "$TOML"
-
-echo "setup: $TOML pinned to latest.integration and marked skip-worktree"
 
 # ---------------------------------------------------------------------------
 # Overlay tracked source files that carry local-dev-only changes. Each is
@@ -123,6 +125,9 @@ if [[ -d "$SKILLS_SRC" ]]; then
     echo "$MARKER_BEGIN"
     (cd "$SKILLS_SRC" && find . -type f -not -path './.git/*' -not -path './.gitignore') |
       sed 's|^\./||'
+    # Also covers what the steps below generate under .local/ (.moderne/cli/*),
+    # which has no counterpart in the overlay source.
+    echo ".local/"
     echo "$MARKER_END"
   } >> "$EXCLUDE_FILE"
 
@@ -130,18 +135,68 @@ if [[ -d "$SKILLS_SRC" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Copy the shared .local overlay into the workspace so the CLI in this worktree
-# starts from a known-good local config (e.g. gradle init scripts, Moderne CLI
-# home).
+# Expand environment references in the workspace copy of settings.local.json.
+# The overlay source keeps them as $CONDUCTOR_WORKSPACE_PATH placeholders so it
+# stays machine-independent, but Claude Code does not expand variables in
+# settings env values — it hands them to tools verbatim, so an unexpanded
+# placeholder becomes a literal path segment and everything reading the
+# variable silently gets a nonexistent path.
+#
+# Only this file is expanded: CLAUDE.local.md deliberately shows the same
+# variables as literal shell examples and must not be rewritten.
+# ---------------------------------------------------------------------------
+SETTINGS="$REPO_ROOT/.claude/settings.local.json"
+
+if [[ -f "$SETTINGS" ]]; then
+  # Also makes a manual run work, where Conductor has not set this itself.
+  CONDUCTOR_WORKSPACE_PATH="$REPO_ROOT" python3 - "$SETTINGS" <<'PY'
+import json, os, re, sys
+
+path = sys.argv[1]
+with open(path) as fh:
+    doc = json.load(fh)
+
+missing = set()
+pattern = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)")
+
+def expand(text):
+    def sub(match):
+        name = match.group(1) or match.group(2)
+        value = os.environ.get(name)
+        if value is None:
+            missing.add(name)
+            return match.group(0)
+        return value
+    return pattern.sub(sub, text)
+
+def walk(node):
+    if isinstance(node, dict):
+        return {k: walk(v) for k, v in node.items()}
+    if isinstance(node, list):
+        return [walk(v) for v in node]
+    if isinstance(node, str):
+        return expand(node)
+    return node
+
+expanded = walk(doc)
+
+if missing:
+    sys.exit("setup: unset variable(s) referenced by settings.local.json: "
+             + ", ".join(sorted(missing)))
+
+with open(path, "w") as fh:
+    json.dump(expanded, fh, indent=2)
+    fh.write("\n")
+PY
+  echo "setup: expanded environment references in $SETTINGS"
+fi
+
+# ---------------------------------------------------------------------------
+# .local/ itself arrives with the overlay above (project-overlay/.local/). What
+# is left is the machine-specific CLI config that cannot be checked in.
 # ---------------------------------------------------------------------------
 MODERNE_CLI_HOME="$REPO_ROOT/.local/.moderne/cli"
 export MODERNE_CLI_HOME
-
-if [[ -d "$LOCAL_SRC" ]]; then
-  mkdir -p "$REPO_ROOT/.local"
-  cp -R "$LOCAL_SRC/." "$REPO_ROOT/.local/"
-  echo "setup: copied $LOCAL_SRC into $REPO_ROOT/.local"
-fi
 
 mkdir -p "$MODERNE_CLI_HOME"
 for f in moderne.yml recipes-v5.csv; do

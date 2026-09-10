@@ -69,7 +69,7 @@ Recipe packages are registered in `mod` using `mod config recipe <jar|nuget> ins
 - When there are user asks to rebuild fat jar, this ALWAYS requires pTML on rewrite sdk
 
 #### Testing
-Always test .NET code by running gradle "test" target as this ensures that java server is available when running certain tests that depend on it. Standard `dotnet test` WILL fail for a number of tests that rely on this bridge (it can still be used for intermediate testing to get quick results).
+Always test .NET code by running gradle `:rewrite-csharp:csharpTest` target as this ensures that java server is available when running certain tests that depend on it. Standard `dotnet test` WILL fail for a number of tests that rely on this bridge (it can still be used for intermediate testing to get quick results).
 
 Before opening PR, ALWAYS ensure that gradle test target has been run with latest changes of the code and ALL tests are passing an all repos that had changes.
 
@@ -84,7 +84,7 @@ Before opening PR, ALWAYS ensure that gradle test target has been run with lates
 - When running any csharp recipe through `mod` for first time in claude session, confirm that recipe package versions registered with `mod` are the same as the versions of recipe packages from recipe repo builds (so ensure that the version produced by pTML on recipes repo is the same one that's registered in mod). If it's not, register the newest version of the package with mod.
 - Changes to Gradle files require consultation with the user first. If you are planning to make a change, first analyze carefully if you considered how it is supposed to work right now, and if you still feel change is required STOP and explain IN DETAIL what problem the change would address and how it would work. Give user the diff you're going to introduce to the file. 
 - Add javadoc, xml doc only on public APIs. Keep it concise and avoid entirely for simple / self explanatory methods. Avoid code level comments entirely in newly generated code
-- Never use `Microsoft.Build.Locator` nuget package. Modern Roslyn (`Microsoft.CodeAnalysis.Workspaces.MSBuild` 4.8+) discovers MSBuild itself and evaluates projects in its own out-of-process BuildHost
+- `MSBuildLocator.Register*` calls are no longer necessary with current MSBuild libraries and must NOT be reintroduced. Evaluate projects in-process by referencing `Microsoft.Build`, `Microsoft.Build.Tasks.Core` and `Microsoft.Build.Utilities.Core`, and pointing `MSBUILD_EXE_PATH` at the SDK's `MSBuild.dll` (see `MSBuildEnvironment` in `NuGetResolver.cs`). Do not add the `Microsoft.Build.Locator` package.
 - Keep `Microsoft.CodeAnalysis.*` packages on the latest stable release and upgrade them together.
 - Do not add any "version-pins" to any gradle files. If you believe there's a version mismatch, let the user know. 
 - Do not generate any "notes" on worked performed (or known issues) in `.context` or similar folders unless asked to - all info is to be conveyed in console response by default.
@@ -103,7 +103,7 @@ Key commands:
 
 `mod config recipes list` - list all registered **packages** that contribute recipes and recipe counts each one is contributing (doesn't list actual recipes within them).
 
-`mod build <path>` - builds LSTs for a given folder. The folder may be a "folder org" made up of many subfolders / git repos. Each git repo will be a seperate LST built, but mod build can be run org folder to build many repos in one command as batch. Also, mod build REQUIRES that the folder containing source code be git initialized, commited and have remote `origin` with a url that follows <hostAddress>/org/repo pattern. Must be a valid open source URL but not necessary hold the same source code - just needs to be configured (use [`https://github.com/dotnet/samples.git`](https://github.com/dotnet/samples.git) or similar real OSS URL). Make sure you do this if you're generating synthetic sample source project to test `mod` against.  
+`mod build <path>` - builds LSTs for a given folder. The folder may be a "folder org" made up of many subfolders / git repos. Each git repo will be a seperate LST built, but mod build can be run org folder to build many repos in one command as batch. Also, mod build REQUIRES that the folder containing source code be git initialized, commited and have remote `origin` with a url that follows <hostAddress>/org/repo pattern. Must be a valid open source URL but not necessary hold the same source code - just needs to be configured (use [`https://github.com/dotnet/samples.git`](https://github.com/dotnet/samples.git) or similar real OSS URL). Make sure you do this if you're generating synthetic sample source project to test `mod` against.  `mod build` prunes directories named `target`, `build`, `bin`, `out`, `CVS`, `SCCS`, `docker`, `node_modules`, `vendor`, and anything starting with `.` (`RepositoryDirectory.EXCLUDED_BY_DEFAULT`). Files under them never enter the LST, so a fixture that puts test content in `build/` is silently invisible to recipes. Name such directories something else.
 
 `mod run --recipe=<FullyQualifiedClassName> <path>` runs recipe on the repo at given path. Recipe must be one of the FQN that were registered from one of the recipe packages
 
@@ -141,10 +141,7 @@ all 3 are expected to be conductor worktrees. If the user forgot to add them, ST
 
 ### Source-link setup — create ONCE per session; redo ONLY when a linked worktree changes
 
-The source-link symlinks (below) must exist before the first build/run of a session, and be
-repointed if a linked worktree path changes. Whether they need (re)creating is a PURE-REASONING
-check that costs nothing — do NOT probe disk, run `ls`/`readlink`, or issue any command just to
-"verify":
+The source-link symlinks (below) must exist before the first build/run of a session, and be repointed if a linked worktree path changes. Whether they need (re)creating is a PURE-REASONING check that costs nothing — do NOT probe disk, run `ls`/`readlink`, or issue any command just to "verify":
 
 - **First user message of a conversation** → create both symlinks once, then proceed.
 - **Any later message** → mentally compare the Environment block's Additional working
@@ -153,34 +150,23 @@ check that costs nothing — do NOT probe disk, run `ls`/`readlink`, or issue an
   straight to the real work. Only if a path changed, repoint the affected symlink(s) before the
   next build/run.
 
-Never re-run the symlink commands on a turn where the linked worktrees didn't change — that
-wasted work is exactly what this rule exists to avoid.
+Never re-run the symlink commands on a turn where the linked worktrees didn't change — that wasted work is exactly what this rule exists to avoid.
 
-There are TWO symlinks, both pointing at the SAME injected `rewrite` worktree — and BOTH are
-required (missing either is silent: the build/recipe falls back to a stale canonical clone):
+There are TWO symlinks, both pointing at the SAME injected `rewrite` worktree — and BOTH are required (missing either is silent: the build/recipe falls back to a stale canonical clone):
 
-1. **CLI worktree** (primary workdir): `external/openrewrite/rewrite` → `<rewrite-worktree>`.
-   Used by the fat-jar composite build (`.local/gradle/local-rewrite.init.gradle.kts`).
-2. **Recipes worktree** (the injected `recipes` additional dir): `external/openrewrite/rewrite`
-   → `<rewrite-worktree>`. Used by `Recipes.Source.slnx` to import the SDK's C# project from
-   source. This is the one most easily forgotten because it lives in a different worktree.
+1. **CLI worktree** (primary workdir): `external/openrewrite/rewrite` → `<rewrite-worktree>`. Used by the fat-jar composite build (`.local/gradle/local-rewrite.init.gradle.kts`).
+2. **Recipes worktree** (the injected `recipes` additional dir): `external/openrewrite/rewrite` 
+   → `<rewrite-worktree>`. Used by `Recipes.Source.slnx` to import the SDK's C# project from source. This is the one most easily forgotten because it lives in a different worktree.
 
 Create/repoint both idempotently (safe to re-run every time):
 ```
 mkdir -p "<cli-worktree>/external/openrewrite"     && ln -sfn "<rewrite-worktree>" "<cli-worktree>/external/openrewrite/rewrite"
 mkdir -p "<recipes-worktree>/external/openrewrite" && ln -sfn "<rewrite-worktree>" "<recipes-worktree>/external/openrewrite/rewrite"
 ```
-If the CLI, `rewrite`, or `recipes` worktree is NOT injected into context, STOP and tell the
-user — never self-discover or fall back to canonical clones.
+**If the CLI, `rewrite`, or `recipes` worktree is NOT injected into context, STOP and tell the user — never self-discover or fall back to canonical clones.**
 
-**Also repoint the recipes registry (same trigger: once per session, and on any change to the
-linked `recipes` worktree).** `moderne-cli-setup.sh` copies `~/.moderne/cli/recipes-v5.csv` into
-this worktree's `$MODERNE_CLI_HOME` to isolate it from other runs. That copy holds absolute DLL
-paths (rows like `nuget,<abs-path>.dll,...`) pointing at whatever recipes-csharp worktree was
-registered globally — usually a DIFFERENT conductor worktree than the one linked this session.
-Rewrite the recipes-csharp worktree segment to the currently-linked `recipes` worktree, or
-`mod run` dies resolving dead DLL paths (`dotnet add package <dll>` → `Invalid package id`,
-because the stale DLL no longer exists on disk):
+**Also repoint the recipes registry (same trigger: once per session, and on any change to the linked `recipes` worktree).** `moderne-cli-setup.sh` copies `~/.moderne/cli/recipes-v5.csv` into this worktree's `$MODERNE_CLI_HOME` to isolate it from other runs. That copy holds absolute DLL paths (rows like `nuget,<abs-path>.dll,...`) pointing at whatever recipes-csharp worktree was registered globally — usually a DIFFERENT conductor worktree than the one linked this session. Rewrite the recipes-csharp worktree segment to the currently-linked `recipes` worktree, or`mod run` dies resolving dead DLL paths (`dotnet add package <dll>` → `Invalid package id`, because the stale DLL no longer exists on disk):
+
 ```
 CSV="$MODERNE_CLI_HOME/recipes-v5.csv"
 RECIPES_PARENT="$(dirname "<recipes-worktree>")"   # e.g. /Users/andrew/conductor/workspaces/recipes-csharp
@@ -203,16 +189,11 @@ Recipes project has two solution files:
 
 Builds the CLI fat jar against a local rewrite checkout via Gradle composite build, so rewrite (Java + C#) changes flow in without publishing. Avoids ~/.m2 / ~/.nuget collisions between parallel worktrees. This is the preferred way to work inside conductor to ensure isolated parallel work streams
 
-**Setup (gated by the Source-link setup rule above)
+### Setup (perform at least once and don't skip any steps)
 
-Ensure the Source-link symlinks (above) are in place before building/running. Redo them only
-when a linked workspace path changes between turns — detected by reading the Environment block,
-never by running commands. It REQUIRES that the user has provided rewrite sdk and recipes repos
-as additional workspaces (injected into environment block in context)
+Ensure the Source-link symlinks (above) are in place before building/running. Redo them only when a linked workspace path changes between turns — detected by reading the Environment block, never by running commands. It REQUIRES that the user has provided rewrite sdk and recipes repos as additional workspaces (injected into environment block in context)
 
-- create/repoint BOTH source-link symlinks (CLI worktree AND recipes worktree) per the
-  pre-flight above — each `external/openrewrite/rewrite` → the injected `rewrite` worktree
-- modify `.claude/settings.local.json` to use expanded absolute paths (it doesn't do variable expansion). Ensure that expanded env vars are explicitly used in any commands inside this turn as the `settings.local.json` changes will not take effect until next conversation turn.
+- create/repoint BOTH source-link symlinks (CLI worktree AND recipes worktree) per the pre-flight above — each `external/openrewrite/rewrite` → the injected `rewrite` worktree
 - ensure the dev fat jar is built (see special command below)
 - set env vars for remainder of the session:
 
@@ -340,4 +321,4 @@ Other:
 - `Repos` reports which repos the task touched, not git cleanliness. `CHANGED` means the task
   produced changes there, committed or not; the parenthetical carries the landing state
   (`uncommitted`, `unpushed`, `pushed`). List `CHANGED` repos first.
-
+- Summary block should appear IN ADDITION to normal response so user can "scroll up" to see more details where necessary without asking for follow ups

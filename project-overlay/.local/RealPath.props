@@ -1,0 +1,211 @@
+<!--
+  RealPath.props  -  make an MSBuild project's identity insensitive to symlinks in its path.
+
+  THE PROBLEM  (https://github.com/dotnet/msbuild/issues/9670 and two unreported relatives)
+
+  MSBuild takes the project path exactly as it was handed to it, and $(MSBuildProjectDirectory)
+  and $(MSBuildProjectFullPath) are reserved, so they cannot be normalised.  Reach one
+  repository through two names - an IDE indexing ~/projects/thing while the terminal is in
+  /Volumes/Data/thing - and the two builds derive different paths from the project directory
+  while writing into the same physical bin/ and obj/.  What one build records, the next fails
+  to recognise.  Three separate things break, all silently, none repeatably:
+
+    1. IncrementalClean reads the previous build's file list, cannot match those paths against
+       $(IntermediateOutputPath) (FindUnderPath is a string prefix compare after a LEXICAL
+       GetFullPath), concludes they are orphans of an older build and DELETES them - including
+       obj/.../ref/*.dll.  The next build fails with CS0006 "Metadata file ... could not be
+       found".  That is issue 9670.
+
+    2. NuGet drops the entire project-reference closure; see RealPath.targets for the mechanism.
+       project.assets.json is written with an empty closure, transitive project references and
+       transitive package references vanish, and the compile fails with CS0103.
+
+    3. GenerateDepsFile leaves transitive references out of the .deps.json.  The build succeeds
+       and the application dies at startup with FileNotFoundException.
+
+  THE FIX
+
+  Resolve $(MSBuildProjectDirectory) to a symlink-free absolute path and re-anchor everything
+  MSBuild derives from the project directory onto it.  Both spellings then produce identical
+  build state - same obj/, same bin/, same FileListAbsolute.txt, same reference assembly paths,
+  same compile-input hash - so either path can be used at any time, incrementally, in any order.
+
+  Everything here is evaluation-time MSBuild: no custom task, no command, no environment
+  variable.  Importing the file is the whole installation.
+
+  WHY THE LOOP IS UNROLLED INTO A GENERATED FILE
+
+  $(BaseIntermediateOutputPath) must exist before Microsoft.Common.props defaults it, which is
+  during evaluation - and MSBuild evaluation has neither loops nor any way to run code.  A task
+  (inline C# via RoslynCodeTaskFactory included) executes long after evaluation is finished, by
+  which time $(TargetRefPath), @(IntermediateAssembly) and the rest are already baked, so a task
+  cannot supply this value however elegantly it computes it.  Recursive <Import> is rejected by
+  MSBuild as a duplicate import (MSB4011).  So the climb is written out once per possible path
+  component, in the generated RealPath.Walk.props, and kept out of this file.
+
+  INSTALL - copy RealPath.props, RealPath.Walk.props and RealPath.targets next to your repo's
+  Directory.Build.props, then:
+
+      Directory.Build.props:
+      <Project>
+        <Import Project="$(MSBuildThisFileDirectory)RealPath.props" />
+        ...your own properties after this...
+      </Project>
+
+      Directory.Build.targets:
+      <Project>
+        <Import Project="$(MSBuildThisFileDirectory)RealPath.targets" />
+      </Project>
+
+  Both files are needed; they fix different halves of the problem.  This one must be reached
+  through Directory.Build.props rather than from a .csproj, for the ordering reason above.
+
+  Opt a project out with <NormalizeSymlinkedProjectPath>false</NormalizeSymlinkedProjectPath>.
+
+  PROPERTIES PUBLISHED FOR YOUR OWN USE
+    $(RealProjectDir)             - project directory, symlinks resolved, trailing slash
+    $(RealSourceRoot)             - directory holding Directory.Build.props, symlinks resolved
+    $(RealArtifactsPath)          - artifacts directory, symlinks resolved (artifacts layout only)
+    $(ProjectPathContainsSymlink) - true when this build was launched through a symlinked path
+-->
+<Project>
+
+  <PropertyGroup>
+    <NormalizeSymlinkedProjectPath Condition="'$(NormalizeSymlinkedProjectPath)' == ''">true</NormalizeSymlinkedProjectPath>
+    <_RpSep>$([System.IO.Path]::DirectorySeparatorChar)</_RpSep>
+  </PropertyGroup>
+
+  <!--
+    Seed the climb.  Each step in RealPath.Walk.props reads .LinkTarget for the current
+    component: a component that is a symbolic link is replaced by its final target
+    (ResolveLinkTarget with returnFinalTarget: true, so chains of links collapse at once), and
+    any other component is popped onto _RpTail.  Reading .LinkTarget first keeps the resolve
+    call off non-links, where it returns null and .FullName would throw.  _RpRoot tracks the
+    path root so the rebuilt tail can be re-rooted at the end, which also keeps this correct on
+    Windows where the root is "C:\" rather than "/".
+  -->
+  <PropertyGroup Condition="'$(NormalizeSymlinkedProjectPath)' == 'true'">
+    <_RpCur>$(MSBuildProjectDirectory)</_RpCur>
+    <_RpTail></_RpTail>
+    <_RpRoot></_RpRoot>
+    <_RpLink></_RpLink>
+  </PropertyGroup>
+
+  <Import Project="$(MSBuildThisFileDirectory)RealPath.Walk.props" Condition="'$(NormalizeSymlinkedProjectPath)' == 'true'" />
+
+  <PropertyGroup Condition="'$(NormalizeSymlinkedProjectPath)' == 'true'">
+    <!--
+      An empty cursor means the climb reached the root, so the result is complete.  A cursor
+      that is still set means the path was deeper than the unrolled budget; RealProjectDir then
+      stays empty, nothing below applies, the build behaves exactly like stock MSBuild, and
+      RealPath.targets raises warning RP0001 so it does not pass unnoticed.
+    -->
+    <RealProjectDir Condition="'$(_RpCur)' == '' and '$(_RpRoot)' != ''">$(_RpRoot)$(_RpTail)</RealProjectDir>
+    <_RpSeenDir>$([MSBuild]::EnsureTrailingSlash($(MSBuildProjectDirectory)))</_RpSeenDir>
+    <ProjectPathContainsSymlink>false</ProjectPathContainsSymlink>
+    <ProjectPathContainsSymlink Condition="'$(RealProjectDir)' != '' and '$(RealProjectDir)' != '$(_RpSeenDir)'">true</ProjectPathContainsSymlink>
+  </PropertyGroup>
+
+  <!--
+    The real path of the directory that holds Directory.Build.props, derived from the climb we
+    already did rather than repeating it: that directory is an ancestor of the project
+    directory, so stripping the same relative offset off the resolved project directory yields
+    it.  The EndsWith test is the proof that the derivation is valid - it only holds when the
+    offset itself crossed no symlink, which is exactly when the shortcut is sound.  When it does
+    not hold we simply publish nothing and fall back to leaving artifacts paths alone.
+  -->
+  <PropertyGroup Condition="'$(RealProjectDir)' != '' and '$(_DirectoryBuildPropsBasePath)' != ''">
+    <_RpSeenSourceRoot>$([MSBuild]::EnsureTrailingSlash($(_DirectoryBuildPropsBasePath)))</_RpSeenSourceRoot>
+    <_RpOffset></_RpOffset>
+    <_RpOffset Condition="$(_RpSeenDir.StartsWith('$(_RpSeenSourceRoot)'))">$(_RpSeenDir.Substring($(_RpSeenSourceRoot.Length)))</_RpOffset>
+    <RealSourceRoot Condition="$(RealProjectDir.EndsWith('$(_RpOffset)'))">$(RealProjectDir.Substring(0, $([MSBuild]::Subtract($(RealProjectDir.Length), $(_RpOffset.Length)))))</RealSourceRoot>
+  </PropertyGroup>
+
+  <!--
+    Which output layout is in play.  Under the artifacts layout the SDK derives bin/ and obj/
+    from $(ArtifactsPath), so that is the single path to normalise - and we must keep our hands
+    off BaseOutputPath/BaseIntermediateOutputPath, because setting those here would silently win
+    over the SDK and quietly disable the artifacts layout altogether.
+
+    $(ArtifactsPath) has not been defaulted yet at this point (Microsoft.NET.DefaultArtifactsPath.props
+    runs after Directory.Build.props), so reproduce the default it is about to choose.  An
+    ArtifactsPath the user hardcoded to some unrelated absolute path needs no help: it is the
+    same constant string in both spellings already, and StartsWith leaves it alone.
+  -->
+  <PropertyGroup Condition="'$(RealProjectDir)' != ''">
+    <_RpArtifacts Condition="'$(UseArtifactsOutput)' == 'true' or '$(ArtifactsPath)' != ''">true</_RpArtifacts>
+    <_RpSeenArtifacts Condition="'$(_RpArtifacts)' == 'true' and '$(ArtifactsPath)' != ''">$(ArtifactsPath)</_RpSeenArtifacts>
+    <_RpSeenArtifacts Condition="'$(_RpArtifacts)' == 'true' and '$(ArtifactsPath)' == '' and '$(_DirectoryBuildPropsBasePath)' != ''">$(_DirectoryBuildPropsBasePath)$(_RpSep)artifacts</_RpSeenArtifacts>
+    <RealArtifactsPath Condition="'$(_RpSeenArtifacts)' != '' and '$(RealSourceRoot)' != '' and $(_RpSeenArtifacts.StartsWith('$(_RpSeenSourceRoot)'))">$(RealSourceRoot)$(_RpSeenArtifacts.Substring($(_RpSeenSourceRoot.Length)))</RealArtifactsPath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RealProjectDir)' != ''">
+    <!--
+      $(ProjectDir) is the SDK's own "where does this project live" property - it is what lands
+      in the generated .editorconfig as build_property.ProjectDir, and what several targets fall
+      back to.  Unlike the reserved $(MSBuildProjectDirectory) it is settable, and everything
+      downstream honours it.
+    -->
+    <ProjectDir>$(RealProjectDir)</ProjectDir>
+
+    <!--
+      IncrementalClean filters @(FileWritesShareable) through
+      FindUnderPath Path="$(MSBuildProjectDirectory)" - the one cone check still using the seen
+      spelling, which our now-real file writes fall outside of, silently dropping them from
+      tracking.  Untracked writes are precisely what becomes an "orphan" to be deleted on the
+      next build.  This property - which the SDK itself turns on for the artifacts layout, whose
+      outputs are likewise outside the project folder - skips that cone check.  The lists it
+      feeds are still confined to $(OutDir) and $(IntermediateOutputPath), so nothing outside
+      this project's own output is ever a deletion candidate.
+    -->
+    <TrackFileWritesShareableOutsideOfProjectDirectory>true</TrackFileWritesShareableOutsideOfProjectDirectory>
+  </PropertyGroup>
+
+  <!-- Artifacts layout: normalise the one path everything else hangs off, and stop. -->
+  <PropertyGroup Condition="'$(_RpArtifacts)' == 'true' and '$(RealArtifactsPath)' != ''">
+    <!-- The SDK deliberately keeps ArtifactsPath without a trailing slash; match it. -->
+    <ArtifactsPath>$(RealArtifactsPath.TrimEnd($(_RpSep)))</ArtifactsPath>
+  </PropertyGroup>
+
+  <!-- Default layout: anchor obj/ and bin/ at the real project directory. -->
+  <PropertyGroup Condition="'$(RealProjectDir)' != '' and '$(_RpArtifacts)' != 'true'">
+    <!--
+      These are set as ROOTED paths ALWAYS, not only when a symlink was actually crossed.
+      Rooting them unconditionally is the point: the strings then depend on where the project
+      really is and not at all on how this build was launched, so a symlinked build and a
+      real-path build produce identical values.  Leaving them relative in the non-symlinked case
+      would reintroduce the difference one level down - "obj/Debug/net10.0/" and
+      "/real/.../obj/Debug/net10.0/" hash differently in _GenerateCompileDependencyCache, and
+      every switch between the two spellings would rebuild the world.
+
+      Because they are rooted, everything the common targets derive from them is rooted at the
+      real path too - IntermediateOutputPath, OutDir, TargetPath, TargetRefPath,
+      CopyUpToDateMarker, MSBuildProjectExtensionsPath, @(FileWrites) - since
+      [MSBuild]::NormalizePath($(MSBuildProjectDirectory), $(IntermediateOutputPath), ...)
+      discards its first argument as soon as the second one is rooted.
+    -->
+    <BaseIntermediateOutputPath Condition="'$(BaseIntermediateOutputPath)' == ''">$(RealProjectDir)obj$(_RpSep)</BaseIntermediateOutputPath>
+    <BaseOutputPath Condition="'$(BaseOutputPath)' == ''">$(RealProjectDir)bin$(_RpSep)</BaseOutputPath>
+    <!-- If something upstream set them to a relative path, re-root that path at the real directory. -->
+    <BaseIntermediateOutputPath Condition="'$([System.IO.Path]::IsPathRooted($(BaseIntermediateOutputPath)))' == 'false'">$(RealProjectDir)$(BaseIntermediateOutputPath)</BaseIntermediateOutputPath>
+    <BaseOutputPath Condition="'$([System.IO.Path]::IsPathRooted($(BaseOutputPath)))' == 'false'">$(RealProjectDir)$(BaseOutputPath)</BaseOutputPath>
+  </PropertyGroup>
+
+  <!--
+    The default item globs (Compile/None/EmbeddedResource "**/*") are kept out of bin/ and obj/
+    by putting $(BaseOutputPath)/** and $(BaseIntermediateOutputPath)/** into
+    $(DefaultItemExcludes).  Those excludes now name the real path, while a glob walking the
+    project folder through a symlink produces candidates named the seen way, so the two stop
+    matching and everything under obj/ - AssemblyInfo.cs, GlobalUsings.g.cs, ... - gets swept
+    into @(Compile).  Add the same two cones spelled the way this build sees them.  When the
+    project was reached by its real path these are identical to the SDK's own entries and
+    simply deduplicate away.
+  -->
+  <PropertyGroup Condition="'$(ProjectPathContainsSymlink)' == 'true' and '$(_RpArtifacts)' != 'true'">
+    <_RpSeenIntermediate Condition="$(BaseIntermediateOutputPath.StartsWith('$(RealProjectDir)'))">$(_RpSeenDir)$(BaseIntermediateOutputPath.Substring($(RealProjectDir.Length)))</_RpSeenIntermediate>
+    <_RpSeenOutput Condition="$(BaseOutputPath.StartsWith('$(RealProjectDir)'))">$(_RpSeenDir)$(BaseOutputPath.Substring($(RealProjectDir.Length)))</_RpSeenOutput>
+    <DefaultItemExcludes Condition="'$(_RpSeenIntermediate)' != ''">$(DefaultItemExcludes);$(_RpSeenIntermediate)/**</DefaultItemExcludes>
+    <DefaultItemExcludes Condition="'$(_RpSeenOutput)' != ''">$(DefaultItemExcludes);$(_RpSeenOutput)/**</DefaultItemExcludes>
+  </PropertyGroup>
+
+</Project>
