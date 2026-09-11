@@ -58,30 +58,80 @@ mod CLI depends on rewrite sdk. Rewrite SDK launches RPC server executable imple
 
 Recipe packages are registered in `mod` using `mod config recipe <jar|nuget> install <packageId>@<packageVersion>`. Once registered, this command will use latest version of that package from local package cache (~/.m2, ~/.nuget/packages, etc). It only needs to be rerun if registering new package or version change. When iterating locally, the version doesn't change between builds. For .NET based packages, it will always have a `-zlocal` suffix. 
 
-### Ensuring we're running latest code
+### Package based setup 
+This mode relies on using compiled packages/assemblies to satisfy dependencies between the related repos. It relies on latest version existing in package caches (~/.m2, ~/.nuget/packages). Inside Conductor, prefer source-linked mode instead.
+
+When working in recipe project in this mode, use  `Recipes.slnx` (which wires things through  PackageReference)
+
+Follow these steps to ensure we're running latest code. 
+
 1. pTML on rewrite sdk. This will also publish nuget portions into global nuget cache. In both cases, the pTML ensures that cache is loaded with latest code even if version number hasn't changed.
-2. Build mod cli devFatJar
+2. Build mod cli devFatJar (`./gradlew :mod:devFatJar`)
 3. publish latest recipes into nuget global cache via pTML on the recipes repo. 
 
-### When to rebuild
+- When running any csharp recipe through `mod` for first time in claude session, confirm that recipe package versions registered with `mod` are the same as the versions of recipe packages from recipe repo builds (so ensure that the version produced by pTML on recipes repo is the same one that's registered in mod). If it's not, register the newest version of the package with mod. 
+
+#### When to rebuild
 - When making changes to c# recipes project, only pTML on that project is required. Latest versions are pulled automatically from latest global nuget cache. Changes to recipes DO NOT require LST to be rebuilt and should be skipped.
 - When there are any changes to LST classes or parser, then CLI fat jar must be rebuilt and LST MUST be rebuilt via `mod build`.
 - When there are user asks to rebuild fat jar, this ALWAYS requires pTML on rewrite sdk
 
-#### Testing
+
+### Source-linked session setup
+
+Cross repos are wired directly via source references. This is the preferred working method for Conductor. 
+
+As this method relies on sources not part of same git repo, they are  mounted under `./external/**` in worktrees to allow consistent relative path usage in each repo. A special setup is required to wire everything properly, which is codified in the extra gradle file `.local/gradle/local-rewrite.init.gradle.kts`. Unless something is not working as expected, you have no reason to read it. 
+
+When working in conductor, this mode REQUIRES that the user injected the rewrite (SDK) and recipes worktrees as additional working directories; take both paths from the Environment block, never byself-discovery and never falling back to canonical clones. **If the CLI, `rewrite`, or
+`recipes` worktree is not injected into context, STOP and tell the user.**
+
+#### Building mod fat jar
+```
+./gradlew :mod:devFatJar -I .local/gradle/local-rewrite.init.gradle.kts \
+  -PrewriteWorktree=<injected rewrite worktree> \
+  -PrecipesWorktree=<injected recipes worktree>
+```
+
+The init script also contributes two tasks, neither wired into `devFatJar`:
+
+- `:devCsharpRecipesBuild` — builds the C# recipes solution against the source-linked SDK.
+- `:devRecipesRegister` — rebuilds the recipe catalogue (see Recipe Registrations below).
+
+On first setup of a session, ask for both: `./gradlew :mod:devFatJar :devRecipesRegister -I ... -P...`. Ordering is arranged automatically. Afterwards `:mod:devFatJar` alone is enough until recipe declarations change.
+
+`MODERNE_CLI_HOME` and `REWRITE_DOTNET_RPC_SERVER` are already exported into your environment by the workspace setup; do not set them by hand. The Gradle tasks write the catalogue to whatever `MODERNE_CLI_HOME` you inherited, so `mod` and Gradle always agree.
+
+In this mode, use  `Recipes.Source.slnx` if you ever need to build not through gradle wrapper. This is what imports rewrite sdk csharp project as solution via symlink
+
+
+### Working in Conductor
+When using Conductor as the claude code wrapper, special rules apply. Conductor creates unique work trees for each repo allowing parallel developement and shipping of features. Worktrees are created in ~/conductor/ subfolders and this is how one can detect that work is being done inside conductor. Under normal circumstances the user will provide related repos in additional to primary working directory - check the Environment block’s Additional working directories field to confirm injected worktrees. Don’t infer from prompt prose and don’t probe disk - the paths to these additional worktrees must be explicitly provided and appear in your context. This will ensure claude has access to 3 key repos:
+- mod CLI
+- rewrite sdk
+- recipes
+
+
+all 3 are expected to be conductor worktrees. If the user forgot to add them, STOP and instruct the user to do so.
+- ALWAYS work only on the conductor worktrees when the primary workdir is conductor. NEVER try to access connonical worktrees (default "non-conductor") for either reading or writing, nor try to "self discover" correct repositories. If the user has not injected them into context STOP AND TELL THE USER.
+Always default to using source linked mode by default - do not switch to package based mode unless instructed to do so. If you can't figure out why source linked mode doesn't work, stop and let the user know. 
+- when running any mod command, assume it must be run via `modw` script from the cli conductor worktree that is explicitly injected into context. NEVER run global `mod` unless explicitly told otherwise.
+- the user MAY add a working set directory containing an org of git repos. This is to be used as implicit input for evaluation of mod cli commands like `build` and recipe `run`.
+
+## Testing
 Always test .NET code by running gradle `:rewrite-csharp:csharpTest` target as this ensures that java server is available when running certain tests that depend on it. Standard `dotnet test` WILL fail for a number of tests that rely on this bridge (it can still be used for intermediate testing to get quick results).
 
 Before opening PR, ALWAYS ensure that gradle test target has been run with latest changes of the code and ALL tests are passing an all repos that had changes.
 
-### Other rules
+## Other rules
 - NEVER clear out .m2 or nuget global cache unless deleting a single targeted package. This should not be necessary under normal cicumstances as pTML target ensures that global caches are populated with latest build versions.
-- The CLI uses `gradle/libs.version.toml` file to control which module versions are loaded by default. When iterating locally, the file needs to be adjusted to make rewrite and rewrite-csharp modules use `latest.integration` instead of `latest.release` so it can pick up the latest from maven cache. However, this change should NEVER be checked in.
+- A number of strategic patches are done by setup scripts that modify some checked in files but sets them as skip-worktree so the local changes never get commited by accident. This is normal and no reason to comment on unless it comes into direct scope of work.
 - proactively clearing m2 / nuget global caches is NOT required. pTML already has logic to do this. Only start investigating if caching is issue if there are suspecion that code that was added did not in fact run as expected.
 - If user asks to rebuild, depending on the project the following action should be taken:
   - CLI - gradle devFatJar target (preceeded by pTML of the SDK repo)
   - Rewrite SDK - pTML gradle target
   - Recipes - pTML gradle target 
-- When running any csharp recipe through `mod` for first time in claude session, confirm that recipe package versions registered with `mod` are the same as the versions of recipe packages from recipe repo builds (so ensure that the version produced by pTML on recipes repo is the same one that's registered in mod). If it's not, register the newest version of the package with mod.
+
 - Changes to Gradle files require consultation with the user first. If you are planning to make a change, first analyze carefully if you considered how it is supposed to work right now, and if you still feel change is required STOP and explain IN DETAIL what problem the change would address and how it would work. Give user the diff you're going to introduce to the file. 
 - Add javadoc, xml doc only on public APIs. Keep it concise and avoid entirely for simple / self explanatory methods. Avoid code level comments entirely in newly generated code
 - `MSBuildLocator.Register*` calls are no longer necessary with current MSBuild libraries and must NOT be reintroduced. Evaluate projects in-process by referencing `Microsoft.Build`, `Microsoft.Build.Tasks.Core` and `Microsoft.Build.Utilities.Core`, and pointing `MSBUILD_EXE_PATH` at the SDK's `MSBuild.dll` (see `MSBuildEnvironment` in `NuGetResolver.cs`). Do not add the `Microsoft.Build.Locator` package.
@@ -89,7 +139,7 @@ Before opening PR, ALWAYS ensure that gradle test target has been run with lates
 - Do not add any "version-pins" to any gradle files. If you believe there's a version mismatch, let the user know. 
 - Do not generate any "notes" on worked performed (or known issues) in `.context` or similar folders unless asked to - all info is to be conveyed in console response by default.
 
-### Version bumps
+## Version bumps
 The solution uses nebula release management and recieves automatic version number. If the local version is behind origin, and a new maven release has been made that includes a higher version of rewrite / recipes then rebuildling local mod cli will NOT pick up the local version loaded into pTML but instead use the one from the maven. If it looks like expected code changes haven't "kicked in", this is a common reason why. The solution is to rebase the code on to remote to ensure local builds receive the highest version number and are selected.
 
 
@@ -97,7 +147,7 @@ The solution uses nebula release management and recieves automatic version numbe
 
 Key commands:
 
-`mod config recipes <jar|nuget|go|npm|pip> install <packageId>@<packageVersion>` - install recipes from a given package into mod. This delegates to native package manager based on each ecosystem to obtain the necessary package version from remote source. 
+`mod config recipes <jar|nuget|go|npm|pip> install <packageId>@<packageVersion>` - install recipes from a given package into mod. This delegates to native package manager based on each ecosystem to obtain the necessary package version from remote source. When using local package based integrations, publishing recipe packages into global cache (~/.m2, ~/.nuget/packages, etc) will allow them to be picked up automatically. Optionally instead of `packageId@packageVersion`, a path to a .net dll can be passed allowing registration that doesn't rely on creating nuget packages (source linked workflow). 
 
 `mod config recipes <jar|nuget|go|npm|pip> delete <packageId>` - unregistered package
 
@@ -114,6 +164,15 @@ Key commands:
 ### Mod fat jar
 Mod is distributed as executabled (production release), but for local development a fat jar is produced via `devFatJar` target and executed via `modw` shell script at the root of CLI source repo. ALWAYS go through this wrapper script `modw` when executing `mod` CLI.
 
+### Recipe Registrations
+
+`mod config recipes <jar|nuget|go|npm|pip> install ...` command loads the specified recipe package / assembly  and interrogates it over RPC to determine which recipes it exposes. These recipes are then stored in `$MODERNE_CLI_HOME/recipes-v5.csv`. The registration process is long and only needs to be run when there's reason to believe that the declarations of recipes in the artifacts that this csv points to have changed (new recipes, changes in descriptions, recipe options, etc). Simply changing the behavior of existing recipe doesn't require it's reregistration.
+
+#### Local optimizations
+`:devRecipesRegister` (in `.local/gradle/local-rewrite.init.gradle.kts`) is an optimized version of recipe install command in mod cli that layers in a caching mechanism that matches recipe binaries (dll, jar) hashes with their precomputed recipe content. It installs base set of core recipes and the csharp ones - this should be everything that's needed under normal operations. This allows bypassing heavy invocations of cli based recipe install for pure performance gain. 
+
+- `-PforceRecipeRegistration=true` — ignore the cache and re-register from scratch. 
+
 ### Errors
 #### Parse failures
 Happens when an particular source file cannot be parsed with a syntax parser. This usually requires looking into the underlying parser. The actual parse failures need to be obtained by running the following recipe that produces a data table containing specific files/locations and error messages.
@@ -128,91 +187,7 @@ Desynchronization most often caused by wrong versions of packages being working 
 
 When genuine desync does creep up is usually when changes were made to one language without updating the others (or making corresponding changes to sender/reciever). 
 
-## Working in Conductor
-When using Conductor as the claude code wrapper, special rules apply. Conductor creates unique work trees for each repo allowing parallel developement and shipping of features. Worktrees are created in ~/conductor/ subfolders and this is how one can detect that work is being done inside conductor. Under normal circumstances the user will provide related repos in additional to primary working directory - check the Environment block’s Additional working directories field to confirm injected worktrees. Don’t infer from prompt prose and don’t probe disk - the paths to these additional worktrees must be explicitly provided and appear in your context. This will ensure claude has access to 3 key repos:
-- mod CLI
-- rewrite sdk
-- recipes
 
-all 3 are expected to be conductor worktrees. If the user forgot to add them, STOP and instruct the user to do so.
-- ALWAYS work only on the conductor worktrees when the primary workdir is conductor. NEVER try to access connonical worktrees (default "non-conductor") for either reading or writing, nor try to "self discover" correct repositories. If the user has not injected them into context STOP AND TELL THE USER.
-
-- when running any mod command, assume it must be run via `modw` script from the cli conductor worktree that is explicitly injected into context. NEVER run global `mod` unless explicitly told otherwise.
-
-### Source-link setup — create ONCE per session; redo ONLY when a linked worktree changes
-
-The source-link symlinks (below) must exist before the first build/run of a session, and be repointed if a linked worktree path changes. Whether they need (re)creating is a PURE-REASONING check that costs nothing — do NOT probe disk, run `ls`/`readlink`, or issue any command just to "verify":
-
-- **First user message of a conversation** → create both symlinks once, then proceed.
-- **Any later message** → mentally compare the Environment block's Additional working
-  directories in THIS message against the PREVIOUS user message. If the `rewrite` (SDK) and
-  `recipes` worktree paths are unchanged, the symlinks are already correct — do nothing and go
-  straight to the real work. Only if a path changed, repoint the affected symlink(s) before the
-  next build/run.
-
-Never re-run the symlink commands on a turn where the linked worktrees didn't change — that wasted work is exactly what this rule exists to avoid.
-
-There are TWO symlinks, both pointing at the SAME injected `rewrite` worktree — and BOTH are required (missing either is silent: the build/recipe falls back to a stale canonical clone):
-
-1. **CLI worktree** (primary workdir): `external/openrewrite/rewrite` → `<rewrite-worktree>`. Used by the fat-jar composite build (`.local/gradle/local-rewrite.init.gradle.kts`).
-2. **Recipes worktree** (the injected `recipes` additional dir): `external/openrewrite/rewrite` 
-   → `<rewrite-worktree>`. Used by `Recipes.Source.slnx` to import the SDK's C# project from source. This is the one most easily forgotten because it lives in a different worktree.
-
-Create/repoint both idempotently (safe to re-run every time):
-```
-mkdir -p "<cli-worktree>/external/openrewrite"     && ln -sfn "<rewrite-worktree>" "<cli-worktree>/external/openrewrite/rewrite"
-mkdir -p "<recipes-worktree>/external/openrewrite" && ln -sfn "<rewrite-worktree>" "<recipes-worktree>/external/openrewrite/rewrite"
-```
-**If the CLI, `rewrite`, or `recipes` worktree is NOT injected into context, STOP and tell the user — never self-discover or fall back to canonical clones.**
-
-**Also repoint the recipes registry (same trigger: once per session, and on any change to the linked `recipes` worktree).** `moderne-cli-setup.sh` copies `~/.moderne/cli/recipes-v5.csv` into this worktree's `$MODERNE_CLI_HOME` to isolate it from other runs. That copy holds absolute DLL paths (rows like `nuget,<abs-path>.dll,...`) pointing at whatever recipes-csharp worktree was registered globally — usually a DIFFERENT conductor worktree than the one linked this session. Rewrite the recipes-csharp worktree segment to the currently-linked `recipes` worktree, or`mod run` dies resolving dead DLL paths (`dotnet add package <dll>` → `Invalid package id`, because the stale DLL no longer exists on disk):
-
-```
-CSV="$MODERNE_CLI_HOME/recipes-v5.csv"
-RECIPES_PARENT="$(dirname "<recipes-worktree>")"   # e.g. /Users/andrew/conductor/workspaces/recipes-csharp
-sed -i '' -E "s#${RECIPES_PARENT}/[^/]+#<recipes-worktree>#g" "$CSV"
-```
-This only rewrites the worktree-name path segment (`.../recipes-csharp/<name>/...`), so it is
-idempotent and a no-op when already pointing at the linked worktree. The DLLs must still exist —
-`dotnet build Recipes.Source.slnx` in the linked recipes worktree (see setup below) produces them.
-
-Recipes project has two solution files:
-
-  - `Recipes.slnx` - ties rewrite sdk via PackageReference
-  - `Recipes.Source.slnx` - imports rewrite sdk csharp project as solution via symlink. The user prefer to use this mode when using IDE as it allows making changes to both recipes and sdk seamlessly without dealing with republishing packages. 
-
-  When iterating inside conductor, Rewrite.Sources.slnx should be used 
-
-- the user MAY add a working set directory containing an org of git repos. This is to be used as implicit input for evaluation of mod cli commands like `build` and recipe `run`.
-
-## Source-Linked Mode (CLI Repo)
-
-Builds the CLI fat jar against a local rewrite checkout via Gradle composite build, so rewrite (Java + C#) changes flow in without publishing. Avoids ~/.m2 / ~/.nuget collisions between parallel worktrees. This is the preferred way to work inside conductor to ensure isolated parallel work streams
-
-### Setup (perform at least once and don't skip any steps)
-
-Ensure the Source-link symlinks (above) are in place before building/running. Redo them only when a linked workspace path changes between turns — detected by reading the Environment block, never by running commands. It REQUIRES that the user has provided rewrite sdk and recipes repos as additional workspaces (injected into environment block in context)
-
-- create/repoint BOTH source-link symlinks (CLI worktree AND recipes worktree) per the pre-flight above — each `external/openrewrite/rewrite` → the injected `rewrite` worktree
-- ensure the dev fat jar is built (see special command below)
-- set env vars for remainder of the session:
-
-```
-export REWRITE_DOTNET_RPC_SERVER=`<REWRITE_SDK_REPO>/rewrite-csharp/csharp/OpenRewrite.Tool/OpenRewrite.Tool.csproj`
-export MODERNE_CLI_HOME="$CONDUCTOR_WORKSPACE_PATH/.local/.moderne/cli"
-```
-- `dotnet build Recipes.Source.slnx` recipes repo
-- register recipe packages:
-```
-  modw config recipes nuget install <LINKED_RECIPE_REPO>/OpenRewrite.Recipes.CSharp.Core/bin/Debug/net10.0/OpenRewrite.Recipes.CSharp.Core.dll
-   modw config recipes nuget install <LINKED_RECIPE_REPO>/OpenRewrite.Recipes.CSharp.CodeQuality/bin/Debug/net10.0/OpenRewrite.Recipes.CSharp.CodeQuality.dll
-
- modw config recipes nuget install <LINKED_RECIPE_REPO>/OpenRewrite.Recipes.CSharp.Migration.Dotnet/bin/Debug/net10.0/OpenRewrite.Recipes.CSharp.Migration.Dotnet.dll
-```
-
-**Building the fat jar:**
-
-`./gradlew :mod:devFatJar -I .local/gradle/local-rewrite.init.gradle.kts`
 
 
 ## Expectations
