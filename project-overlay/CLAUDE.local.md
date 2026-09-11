@@ -83,22 +83,20 @@ Cross repos are wired directly via source references. This is the preferred work
 
 As this method relies on sources not part of same git repo, they are  mounted under `./external/**` in worktrees to allow consistent relative path usage in each repo. A special setup is required to wire everything properly, which is codified in the extra gradle file `.local/gradle/local-rewrite.init.gradle.kts`. Unless something is not working as expected, you have no reason to read it. 
 
-When working in conductor, this mode REQUIRES that the user injected the rewrite (SDK) and recipes worktrees as additional working directories; take both paths from the Environment block, never byself-discovery and never falling back to canonical clones. **If the CLI, `rewrite`, or
-`recipes` worktree is not injected into context, STOP and tell the user.**
+When working in conductor, this mode REQUIRES that the user injected the rewrite (SDK) worktree as an additional working directory. The recipes worktree is OPTIONAL — it is injected only when the task actually touches recipes. Take every path from the Environment block, never by self-discovery and never falling back to canonical clones. **If the CLI or `rewrite` worktree is not injected into context, STOP and tell the user.** If the work turns out to need recipes and no recipes worktree was injected, STOP and ask for it rather than working around it.
 
 #### Building mod fat jar
 ```
 ./gradlew :mod:devFatJar -I .local/gradle/local-rewrite.init.gradle.kts \
   -PrewriteWorktree=<injected rewrite worktree> \
-  -PrecipesWorktree=<injected recipes worktree>
+  -PrecipesWorktree=<injected recipes worktree>   # only when one was injected
 ```
 
-The init script also contributes two tasks, neither wired into `devFatJar`:
+`-PrewriteWorktree` is required. Pass `-PrecipesWorktree` only when a recipes worktree is in context.
 
-- `:devCsharpRecipesBuild` — builds the C# recipes solution against the source-linked SDK.
-- `:devRecipesRegister` — rebuilds the recipe catalogue (see Recipe Registrations below).
+`:mod:devFatJar` builds the C# side for you — never name a C# build task on the command line.
 
-On first setup of a session, ask for both: `./gradlew :mod:devFatJar :devRecipesRegister -I ... -P...`. Ordering is arranged automatically. Afterwards `:mod:devFatJar` alone is enough until recipe declarations change.
+The init script also contributes `:devRecipesRegister`, which rebuilds the recipe catalogue (see Recipe Registrations below). Ask for it on first setup of a session with recipes — `./gradlew :mod:devFatJar :devRecipesRegister -I ... -P...` — and afterwards only when recipe declarations change.
 
 `MODERNE_CLI_HOME` and `REWRITE_DOTNET_RPC_SERVER` are already exported into your environment by the workspace setup; do not set them by hand. The Gradle tasks write the catalogue to whatever `MODERNE_CLI_HOME` you inherited, so `mod` and Gradle always agree.
 
@@ -106,13 +104,13 @@ In this mode, use  `Recipes.Source.slnx` if you ever need to build not through g
 
 
 ### Working in Conductor
-When using Conductor as the claude code wrapper, special rules apply. Conductor creates unique work trees for each repo allowing parallel developement and shipping of features. Worktrees are created in ~/conductor/ subfolders and this is how one can detect that work is being done inside conductor. Under normal circumstances the user will provide related repos in additional to primary working directory - check the Environment block’s Additional working directories field to confirm injected worktrees. Don’t infer from prompt prose and don’t probe disk - the paths to these additional worktrees must be explicitly provided and appear in your context. This will ensure claude has access to 3 key repos:
-- mod CLI
-- rewrite sdk
-- recipes
+When using Conductor as the claude code wrapper, special rules apply. Conductor creates unique work trees for each repo allowing parallel developement and shipping of features. Worktrees are created in ~/conductor/ subfolders and this is how one can detect that work is being done inside conductor. Under normal circumstances the user will provide related repos in additional to primary working directory - check the Environment block’s Additional working directories field to confirm injected worktrees. Don’t infer from prompt prose and don’t probe disk - the paths to these additional worktrees must be explicitly provided and appear in your context. This will ensure claude has access to the key repos:
+- mod CLI (primary working directory — always)
+- rewrite sdk (always injected)
+- recipes (optional — injected only for work that touches recipes)
 
 
-all 3 are expected to be conductor worktrees. If the user forgot to add them, STOP and instruct the user to do so.
+All of them are expected to be conductor worktrees. The CLI and the SDK are non-negotiable: if either is missing, STOP and instruct the user to add it. Recipes may legitimately be absent — treat it as a signal that this task is CLI/SDK work, and only ask for it if the work genuinely needs recipes.
 - ALWAYS work only on the conductor worktrees when the primary workdir is conductor. NEVER try to access connonical worktrees (default "non-conductor") for either reading or writing, nor try to "self discover" correct repositories. If the user has not injected them into context STOP AND TELL THE USER.
 Always default to using source linked mode by default - do not switch to package based mode unless instructed to do so. If you can't figure out why source linked mode doesn't work, stop and let the user know. 
 - when running any mod command, assume it must be run via `modw` script from the cli conductor worktree that is explicitly injected into context. NEVER run global `mod` unless explicitly told otherwise.
