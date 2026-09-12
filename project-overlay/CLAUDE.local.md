@@ -100,7 +100,7 @@ The init script also contributes `:devRecipesRegister`, which rebuilds the recip
 
 `MODERNE_CLI_HOME` and `REWRITE_DOTNET_RPC_SERVER` are already exported into your environment by the workspace setup; do not set them by hand. The Gradle tasks write the catalogue to whatever `MODERNE_CLI_HOME` you inherited, so `mod` and Gradle always agree.
 
-In this mode, use  `Recipes.Source.slnx` if you ever need to build not through gradle wrapper. This is what imports rewrite sdk csharp project as solution via symlink
+In this mode, use  `Recipes.Source.slnx` if you ever need to build not through gradle wrapper. This is what imports rewrite sdk csharp project as solution via symlink. Symlinks are automatically established during devFatJar build when local-rewrite.init.gradle.kts is used.
 
 
 ### Working in Conductor
